@@ -22,10 +22,10 @@
     { title: "Task limit & ASOS", target: "#btn-continue", place: "above", body: "<p>That's your task budget for the year. The brown cards are <b>ASOS</b> requests: the Air Force, Navy and Marines need Army support, and you must supply it before planning.</p>", do: "Click <b>Continue</b>.", when: () => !App.ui.overlay },
     { title: "Support the other Services", target: ".dock", place: "above", body: "<p>Commit capability cards of the requested types from any zone. They're unavailable for tasks this turn, but they still count for deterrence.</p>", do: "Click <b>Allocate forces</b>, then <b>Auto-select</b> and <b>Commit forces</b>. Repeat for each request.", when: () => E.asosComplete(S(), "fourth") && !modalType() },
     { title: "On to planning", target: "[data-act='asos-done']", place: "above", body: "<p>All requests supported.</p>", do: "Click <b>Proceed to planning</b>.", when: () => S().phase === "planning" },
-    { title: "Your task cards", target: "#hand", place: "above", body: "<p>These are your 21 task cards. <b>Ready</b> means you can plan it somewhere with what's in theater now; <b>needs forces</b> means a capability or MSC is missing, so you'd need to request it.</p><p>Hover any card to read it.</p>", next: true },
+    { title: "Your task cards", target: "#hand", place: "above", body: "<p>These are your 21 task cards. Each shows its <b>effects</b> and cost, and the <b>A B C</b> letters turn green where you can plan it right now. No green letter means a capability or MSC is missing, so you'd need to request it.</p><p>Use the filter buttons to find tasks by effect (for example, <b>Intel</b>). Hover a card to see the full art.</p>", next: true },
     { title: "Staff & commands", target: "#boards", place: "left", body: "<p>Every task uses <b>staff</b> slots (left) and <b>MSC</b> slots (right). An MSC's first two tasks are free. A 3rd, 4th or 5th task is <b>over-tasked</b> (red): it needs a d6 roll to succeed and costs you a point.</p>", next: true },
     { title: "Plan a task", target: "#hand", place: "above", body: "<p>Military Engagement (task 12) builds Access, Influence and Partner Capability. Civil Affairs in Zone B can carry it.</p>", do: "Click the <b>Military engagement (12)</b> card, or any card marked ready.", when: () => modalType() === "planner" || S().plans.fourth.tasks.length > 0 },
-    { title: "The task planner", target: "#pl-confirm", place: "above", body: "<p>The planner checks every requirement: zone, staff, MSCs and capabilities. It auto-assigns sensible choices, and you can click cards to change them. The left side previews the tracker gains.</p><p>Green dots mark zones where the task is feasible.</p>", do: "Click <b>Add to campaign</b>.", when: () => S().plans.fourth.tasks.length > 0 && modalType() !== "planner" },
+    { title: "The task planner", target: "#pl-confirm", place: "above", body: "<p>The planner checks every requirement: zone, staff, MSCs and capabilities. It auto-assigns sensible choices, and you can click cards to change them. The left side previews the tracker gains.</p><p>Green dots mark zones where the task is feasible, and <b>★ best</b> marks where it pays off most. The list under the effects tells you what changes for the crisis dice.</p>", do: "Click <b>Add to campaign</b>.", when: () => S().plans.fourth.tasks.length > 0 && modalType() !== "planner" },
     { title: "Build your campaign", target: "#hand", place: "above", body: "<p>Add more tasks, up to your limit. Aim for:</p><ul><li>trackers that <b>flip an advantage</b> (Intel, Comms, Protection) in a zone,</li><li>trackers that cross a <b>die breakpoint</b>,</li><li>your objective, <b>Zone C</b>.</li></ul>", do: "Plan more tasks, then click <b>Next</b>.", next: true },
     { title: "Force management", target: "#btn-forces", place: "above", body: "<p>Tasks need capabilities <b>in the right zone</b>. Force Management lets you request forces from the global pool (RFF, max 10 in theater), move units between zones, and pick RSOI arrivals. Everything arrives at the <b>end</b> of the turn, ready for next year.</p>", do: "Open <b>Force management</b>.", when: () => modalType() === "forces" || S().plans.fourth.ready },
     { title: "Requests for forces", target: ".modal-foot .btn.primary", place: "above", body: "<p>Click a zone letter under a GFM card to request it there. Combat units (0 pts) only add deterrence. Support units also carry capability points for tasks.</p><p>Watch the deterrence gap: closing it lowers Instability, but towering over the enemy raises it.</p>", do: "Request something if you like, then click <b>Done</b>.", when: () => modalType() !== "forces" },
@@ -41,15 +41,85 @@
     { title: "You're ready", body: "<p>That's a full year of TheaterComplex. You can keep playing this short campaign, or start a full one: hot-seat against a colleague, or against the AI.</p><p>The <b>📖 Rules</b> button opens the Codex any time, including every task card and the die legend.</p>", finish: true },
   ];
 
-  const T = (TC.tutorial = { active: false, i: 0 });
+  // Chapters group the steps (by index into STEPS) for the progress header.
+  const CHAPTERS = [
+    { name: "The board", from: 0 },
+    { name: "Turn start & ASOS", from: 6 },
+    { name: "Planning", from: 10 },
+    { name: "Execution", from: 18 },
+    { name: "Crisis Assessment", from: 21 },
+    { name: "Wrap-up", from: 25 },
+  ];
+  const chapterOf = (i) => CHAPTERS.reduce((c, ch, k) => (i >= ch.from ? k : c), 0);
+
+  // "Show me": performs the step's action for a stuck player.
+  const R = TC.rules;
+  // Do whatever the current crisis zone is waiting for (intel choice, roll, next).
+  function advanceCrisis() {
+    const s = S();
+    const cur = crisisCur();
+    if (!cur) return;
+    if (cur.stage === "intel" && cur.intelTeam === "fourth") {
+      E.chooseIntel(s, "fourth", TC.ai.intelChoice(s, "fourth"));
+      App.render();
+      App.flow();
+    } else if (cur.stage === "ready") TC.crisisUI.actions["cr-roll"]();
+    else if (cur.stage === "done") TC.crisisUI.actions["cr-next"]();
+  }
+  const SHOW_ME = {
+    "Roll for the task limit": () => App.actions["roll-limit"](),
+    "Task limit & ASOS": () => App.actions["overlay-close"](),
+    "Support the other Services": () => {
+      const s = S();
+      s.asos.current.forEach((aid) => {
+        if (s.asos.alloc.fourth[aid]) return;
+        const ids = R.autoAsos(E.asosAvailable(s, "fourth", aid), TC.ASOS_BY_ID[aid]);
+        if (ids) E.allocateAsos(s, "fourth", aid, ids);
+        else E.declareAsosUnmet(s, "fourth", aid);
+      });
+      App.ui.modal = null;
+      App.render();
+    },
+    "On to planning": () => App.actions["asos-done"](),
+    "Plan a task": () => {
+      const s = S();
+      const ok = (num) => TC.ZONES.some((z) => E.evaluateTask(s, "fourth", { num, zone: z }).ok);
+      TC.planner.open(ok(12) ? 12 : TC.TASKS.find((t) => !t.branches && ok(t.num)).num);
+    },
+    "The task planner": () => TC.modalActions["pl-confirm"](),
+    "Force management": () => App.actions.forces(),
+    "Requests for forces": () => App.closeModal(),
+    "Submit the plan": () => App.actions.submit(),
+    Initiative: () => App.actions["overlay-close"](),
+    "Execute your tasks": () => {
+      const s = S();
+      const t = s.impl && s.impl.active === "fourth" && E.remainingTasks(s, "fourth")[0];
+      if (t) App.actions.exec({ dataset: { uid: String(t.uid) } });
+    },
+    "Crisis time": () => App.actions["to-crisis"](),
+    "Intelligence advantage": () => {
+      const s = S();
+      E.chooseIntel(s, "fourth", TC.ai.intelChoice(s, "fourth"));
+      App.render();
+      App.flow();
+    },
+    "Roll the dice": () => advanceCrisis(),
+    "Scoring the zone": () => advanceCrisis(),
+    "Force tailoring": () => App.actions.cleanup(),
+  };
+
+  // view: null while following along; a step index while reviewing earlier steps.
+  const T = (TC.tutorial = { active: false, i: 0, view: null });
 
   T.start = function () {
     T.active = true;
     T.i = 0;
+    T.view = null;
     App.startGame({ seed: SEED, tutorial: true, settings: { turns: 2, aiSpeed: 1.2, planTimerMinutes: 0 }, controllers: { fourth: "human", tenth: "ai" } });
   };
   T.stop = function () {
     T.active = false;
+    T.view = null;
     document.getElementById("coach-root").innerHTML = "";
   };
 
@@ -66,12 +136,38 @@
       T.i++;
       st = current();
     }
+    if (T.view !== null && T.view >= T.i) T.view = null;
     requestAnimationFrame(draw);
   };
 
   T.next = function () {
+    if (T.view !== null) {
+      T.view++;
+      if (T.view >= T.i) T.view = null;
+      return requestAnimationFrame(draw);
+    }
     T.i++;
     App.render();
+  };
+  T.back = function () {
+    const from = T.view === null ? T.i : T.view;
+    T.view = Math.max(0, from - 1);
+    requestAnimationFrame(draw);
+  };
+  T.resume = function () {
+    T.view = null;
+    requestAnimationFrame(draw);
+  };
+  T.showMe = async function () {
+    const st = current();
+    const target = st && st.target && document.querySelector(st.target);
+    if (target) {
+      target.classList.add("hint-pulse");
+      await TC.kit.sleep(650);
+      target.classList.remove("hint-pulse");
+    }
+    const fn = st && SHOW_ME[st.title];
+    if (fn && current() === st) fn();
   };
 
   // While touring the board, keep the turn-start stage out of the way.
@@ -79,20 +175,38 @@
 
   function draw() {
     const root = document.getElementById("coach-root");
-    const st = current();
+    const reviewing = T.view !== null;
+    const st = reviewing ? STEPS[T.view] : current();
     if (!T.active || !st) {
       root.innerHTML = "";
       return;
     }
+    const idx = STEPS.indexOf(st);
     const target = st.target ? document.querySelector(st.target) : null;
     const r = target ? target.getBoundingClientRect() : null;
     const visible = r && r.width > 0 && r.height > 0;
-    const n = STEPS.indexOf(st) + 1;
-    const foot = st.finish
-      ? `<button class="btn sm" data-act="tut-keep">Keep playing</button><button class="btn sm primary" data-act="setup">Full campaign</button>`
-      : `${st.next ? '<button class="btn sm primary" data-act="tut-next">Next →</button>' : ""}<button class="btn sm ghost" data-act="tut-skip" title="Hide the coach and play on">Skip tutorial</button>`;
+    const ch = chapterOf(idx);
+    const chapters = CHAPTERS.map((c, k) => `<i class="${k < ch ? "done" : k === ch ? "now" : ""}" title="${esc(c.name)}"></i>`).join("");
+    const pct = Math.round(((idx + 1) / STEPS.length) * 100);
+    let foot;
+    if (st.finish && !reviewing) {
+      foot = `<button class="btn sm ghost" data-act="tut-back">← Back</button><span class="sp"></span><button class="btn sm" data-act="tut-keep">Keep playing</button><button class="btn sm primary" data-act="setup">Full campaign</button>`;
+    } else if (reviewing) {
+      foot = `<button class="btn sm ghost" data-act="tut-back" ${idx === 0 ? "disabled" : ""}>← Back</button><button class="btn sm ghost" data-act="tut-next">Forward →</button><span class="sp"></span><button class="btn sm primary" data-act="tut-resume">Return to current step</button>`;
+    } else {
+      const canShow = !!st.do && (SHOW_ME[st.title] || visible);
+      foot = `<button class="btn sm ghost" data-act="tut-back" ${idx === 0 ? "disabled" : ""}>← Back</button><span class="sp"></span>
+        ${canShow ? '<button class="btn sm" data-act="tut-show" title="Do this step for me">👉 Show me</button>' : ""}
+        ${st.next ? '<button class="btn sm primary" data-act="tut-next">Next →</button>' : ""}
+        <button class="btn sm ghost" data-act="tut-skip" title="Hide the coach and play on">Skip</button>`;
+    }
+    const doLine = st.do ? `<div class="do ${reviewing ? "done" : ""}">${reviewing ? "✔ " : "▶ "}${st.do}</div>` : "";
     root.innerHTML = `${visible ? `<div class="spot" style="left:${r.left - 6}px;top:${r.top - 6}px;width:${r.width + 12}px;height:${r.height + 12}px"></div>` : ""}
-      <div class="coach" style="left:0;top:0;visibility:hidden"><div class="k">Tutorial · ${n} / ${STEPS.length}</div><h3>${esc(st.title)}</h3><div class="b">${st.body}</div>${st.do ? `<div class="do">▶ ${st.do}</div>` : ""}<div class="f"><span class="prog"></span>${foot}</div></div>`;
+      <div class="coach ${reviewing ? "reviewing" : ""}" style="left:0;top:0;visibility:hidden">
+        <div class="chead"><span class="k">Chapter ${ch + 1} of ${CHAPTERS.length} · ${esc(CHAPTERS[ch].name)}</span><span class="k">${idx + 1} / ${STEPS.length}</span></div>
+        <div class="cprog"><b style="width:${pct}%"></b></div><div class="cchap">${chapters}</div>
+        ${reviewing ? '<div class="revtag">Reviewing an earlier step</div>' : ""}
+        <h3>${esc(st.title)}</h3><div class="b">${st.body}</div>${doLine}<div class="f">${foot}</div></div>`;
     const coach = root.querySelector(".coach");
     const pos = placeCoach(coach.offsetWidth, coach.offsetHeight, visible ? r : null, st.place || "right");
     coach.style.left = `${pos.left}px`;
@@ -135,14 +249,13 @@
   }
 
   window.addEventListener("resize", () => T.active && requestAnimationFrame(draw));
-  document.addEventListener(
-    "scroll",
-    () => T.active && requestAnimationFrame(draw),
-    true
-  );
+  document.addEventListener("scroll", () => T.active && requestAnimationFrame(draw), true);
 
   Object.assign(TC.modalActions, {
     "tut-next": () => T.next(),
+    "tut-back": () => T.back(),
+    "tut-resume": () => T.resume(),
+    "tut-show": () => T.showMe(),
     "tut-skip": () => {
       T.stop();
       App.render();

@@ -488,3 +488,75 @@ input[type="text"], input[type="number"], select { background: #0f161c; color: v
   .menu, .setup, .planner, .crisis .top, .trays, .mat, .endgrid { grid-template-columns: 1fr; }
   .toast-wrap { right: 16px; }
 }
+
+/* ---------------------------------------------------------------- change highlighting */
+.val, .faceoff .num, .instab .v, .scorebox .pts, .scorebox .inf { position: relative; }
+.flash { animation: flashbg 2.8s ease-out both; animation-delay: var(--ago, 0ms); border-radius: 5px; }
+.flash.down { animation-name: flashbgdown; }
+@keyframes flashbg { 0%, 18% { background: rgba(76, 195, 138, 0.45); box-shadow: 0 0 0 3px rgba(76, 195, 138, 0.3); } 100% { background: transparent; box-shadow: none; } }
+@keyframes flashbgdown { 0%, 18% { background: rgba(239, 100, 97, 0.45); box-shadow: 0 0 0 3px rgba(239, 100, 97, 0.3); } 100% { background: transparent; box-shadow: none; } }
+tr.rowflash td { animation: rowbg 2.8s ease-out both; animation-delay: var(--ago, 0ms); }
+@keyframes rowbg { 0%, 25% { background: rgba(243, 199, 104, 0.12); } 100% { background: transparent; } }
+.delta { position: absolute; left: 50%; top: -6px; font: 800 14px var(--head); pointer-events: none; white-space: nowrap; text-shadow: 0 1px 4px #000; z-index: 3;
+  animation: floatup 2.8s ease-out both; animation-delay: var(--ago, 0ms); }
+.delta.up { color: #7af5b0; }
+.delta.down { color: #ff8a87; }
+@keyframes floatup {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(1.4); }
+  10% { opacity: 1; transform: translate(-50%, -6px) scale(1.25); }
+  70% { opacity: 1; transform: translate(-50%, -14px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -22px) scale(1); }
+}
+.zone.zflash { animation: zglow 2.8s ease-out; }
+@keyframes zglow { 0%, 20% { box-shadow: 0 0 0 2px rgba(243, 199, 104, 0.7), 0 0 28px rgba(243, 199, 104, 0.25); } 100% { box-shadow: var(--shadow); } }
+@media (prefers-reduced-motion: reduce) { .delta, .flash, tr.rowflash td, .zone.zflash { animation-duration: 0.01s; } }
+
+/* ---------------------------------------------------------------- readable hand */
+.handfilters { margin-top: -2px; }
+.handfilters .btn { padding: 3px 9px; font-size: 11.5px; }
+.handfilters .btn.on { background: var(--gold); color: #1b1404; border-color: #b9862a; }
+.taskcard.tc2 { width: 136px; display: flex; flex-direction: column; background: #f1efe6; color: #1d2414; }
+.taskcard.tc2 img { aspect-ratio: 3 / 1.25; object-fit: cover; object-position: top; border-bottom: 1px solid #c9c6b5; }
+.tinfo { padding: 5px 6px 6px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.tname { font: 700 13px/1.1 var(--head); letter-spacing: 0.01em; min-height: 29px; }
+.tname b { color: var(--task); margin-right: 2px; }
+.tmode { font: 700 9px var(--body); background: #5b6e2f; color: #fff; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
+.teff { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; min-height: 18px; }
+.te { font: 600 10.5px/1.5 var(--body); background: #dde9d0; color: #23401a; border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+.te.opp { background: #f6d6d3; color: #7a201b; }
+.te.opt { background: transparent; border: 1px dashed #7b8d5c; color: #4e5f34; }
+.tor { font: italic 10px var(--body); color: #6c7360; }
+.tfoot { display: flex; align-items: center; gap: 3px; margin-top: auto; }
+.zdot { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 700 10px var(--head); background: #d4d1c4; color: #8a8775; }
+.zdot.ok { background: #2f8a5a; color: #fff; }
+.tcost { margin-left: auto; font: 700 10.5px var(--body); color: #8a5a1a; background: #f5e3c7; border-radius: 4px; padding: 0 4px; }
+.tcost + .tcost { margin-left: 2px; }
+.taskcard.tc2.blocked::after { background: repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0) 0 10px, rgba(0, 0, 0, 0.12) 10px 20px); }
+
+/* ---------------------------------------------------------------- planner impact */
+.impact { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--line2); display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; }
+.impact li { padding-left: 18px; position: relative; color: #cfd8df; }
+.impact li::before { position: absolute; left: 0; top: 0; font-weight: 800; }
+.impact li.good::before { content: "▲"; color: var(--good); font-size: 10px; top: 2px; }
+.impact li.bad { color: #ffc4c1; }
+.impact li.bad::before { content: "⚠"; color: var(--bad); }
+.impact li.warn::before { content: "＝"; color: var(--warn); }
+.impact li.muted { color: var(--muted); }
+.impact li.muted::before { content: "•"; color: var(--faint); }
+.beststar { font-size: 10.5px; font-weight: 800; color: #1b1404; background: var(--gold2); border-radius: 4px; padding: 0 4px; }
+.btn.on .beststar { background: #1b1404; color: var(--gold2); }
+
+/* ---------------------------------------------------------------- tutorial chapters */
+.coach .chead { display: flex; justify-content: space-between; gap: 8px; }
+.coach .cprog { height: 4px; background: rgba(0, 0, 0, 0.35); border-radius: 2px; margin: 6px 0 4px; overflow: hidden; }
+.coach .cprog b { display: block; height: 100%; background: linear-gradient(90deg, #8fb252, #d6ef9c); transition: width 0.3s; }
+.coach .cchap { display: flex; gap: 4px; margin-bottom: 6px; }
+.coach .cchap i { flex: 1; height: 3px; border-radius: 2px; background: rgba(185, 213, 138, 0.18); }
+.coach .cchap i.done { background: #8fb252; }
+.coach .cchap i.now { background: #d6ef9c; }
+.coach .f .sp { flex: 1; }
+.coach .do.done { border-style: solid; opacity: 0.75; }
+.coach.reviewing { background: linear-gradient(180deg, #23292f, #181d22); border-color: #6c7a86; }
+.coach .revtag { display: inline-block; font-size: 11px; font-weight: 700; color: #1b1404; background: var(--gold2); border-radius: 4px; padding: 0 6px; margin-bottom: 4px; }
+.hint-pulse { animation: hintpulse 0.65s ease-in-out 1; position: relative; z-index: 2; }
+@keyframes hintpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(214, 239, 156, 0); } 50% { box-shadow: 0 0 0 8px rgba(214, 239, 156, 0.7); } }

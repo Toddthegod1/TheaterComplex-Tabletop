@@ -54,16 +54,80 @@
     return slots;
   }
 
+  // What the tracker changes mean for the next Crisis Assessment in this zone.
+  function impactHtml(s, me, zone, req) {
+    const opp = TC.other(me);
+    const oppName = TC.TEAM_INFO[opp].name;
+    const z = s.teams[me].zones[zone];
+    const oz = s.teams[opp].zones[zone];
+    const lines = [];
+    const add = (tone, text) => lines.push(`<li class="${tone}">${text}</li>`);
+    const nextStep = (key, after) => {
+      const cur = R.legend(key, zone, after);
+      for (let v = after + 1; v <= TC.TRACKER_MAX; v++) if (R.legend(key, zone, v) !== cur) return v - after;
+      return null;
+    };
+    Object.entries(req.effects).forEach(([k, v]) => {
+      if (!v) return;
+      if (["partnerCap", "infrastructure", "interop", "stockage"].includes(k)) {
+        const after = R.clamp(z[k] + v, TC.TRACKER_MIN, TC.TRACKER_MAX);
+        const a = R.legend(k, zone, z[k]);
+        const b = R.legend(k, zone, after);
+        const what = { partnerCap: "Partner die", infrastructure: "Theater Army d6 dice", interop: "Partner d4 dice", stockage: "Modifier on each Theater Army die" }[k];
+        const show = (x) => (k === "partnerCap" ? `d${x}` : k === "stockage" ? `${x > 0 ? "+" : ""}${x}` : `×${x}`);
+        if (a !== b) add("good", `<b>${what}: ${show(a)} → ${show(b)}</b>`);
+        else {
+          const n = nextStep(k, after);
+          add("muted", `${TC.EFFECT_LABELS[k]} ${z[k]} → ${after}: no dice change yet${n ? ` (${n} more for the next step)` : " (already at the top)"}`);
+        }
+      } else if (["intel", "comms", "protection"].includes(k)) {
+        const after = R.clamp(z[k] + v, TC.TRACKER_MIN, TC.TRACKER_MAX);
+        const name = TC.EFFECT_LABELS[k];
+        if (z[k] <= oz[k] && after > oz[k]) add("good", `<b>Takes the ${name} advantage</b> (${after} vs ${oz[k]})`);
+        else if (after === oz[k]) add("warn", `Ties ${oppName} on ${name} (${after}–${oz[k]}): neither side gets the advantage`);
+        else if (after < oz[k]) add("muted", `Still behind on ${name} (${after} vs ${oz[k]})`);
+        else add("muted", `Extends the ${name} lead (${after} vs ${oz[k]})`);
+      } else if (k === "assurance") {
+        const after = R.clamp(z.assurance + v, TC.TRACKER_MIN, TC.TRACKER_MAX);
+        if (after >= 6) add("bad", `<b>Assurance reaches ${after}</b>: blocks agreements and security cooperation here, and adds +${after >= 7 ? 2 : 1} Instability`);
+        else if (z.assurance <= 1) add("good", `<b>Ends doubled capability requirements</b> (Assurance 1 → ${after})`);
+        else add("muted", `Assurance ${z.assurance} → ${after}: a buffer against even-turn decay`);
+      } else if (k === "influence") {
+        const after = R.clamp(s.teams[me].influence + v, 0, TC.INFLUENCE_MAX);
+        const oi = s.teams[opp].influence;
+        add(after > oi && s.teams[me].influence <= oi ? "good" : "muted", `Influence ${s.teams[me].influence} → ${after} (${oppName} has ${oi}; higher earns +1 point each turn)`);
+      }
+    });
+    // Expected crisis roll before vs after, using a copy of this army's trackers.
+    const sim = Object.assign({}, s, { teams: Object.assign({}, s.teams, { [me]: JSON.parse(JSON.stringify(s.teams[me])) }) });
+    R.applyEffects(sim, me, zone, req.effects, 1);
+    const before = R.expectedDice(R.readiness(s, me, zone));
+    const after = R.expectedDice(R.readiness(sim, me, zone));
+    const theirs = R.expectedDice(R.readiness(s, opp, zone));
+    if (Math.abs(after - before) > 0.01) add("good", `Expected crisis roll in Zone ${zone}: <b>${before.toFixed(1)} → ${after.toFixed(1)}</b> (${oppName} ≈ ${theirs.toFixed(1)})`);
+    else if (lines.length) add("muted", `Expected crisis roll in Zone ${zone} stays ≈ ${before.toFixed(1)} (${oppName} ≈ ${theirs.toFixed(1)})`);
+    return lines.length ? `<ul class="impact">${lines.join("")}</ul>` : "";
+  }
+
   M.planner = function (m) {
     const s = App.state;
     const me = App.me();
     const task = TC.taskByNum(m.num);
     const ev = E.evaluateTask(s, me, plannerSpec(m), m.uid || undefined);
     const req = ev.req;
-    const zoneBtns = TC.ZONES.map((z) => {
+    // Feasibility per zone, and which feasible zone the effects help most
+    // (scored with the same heuristic the AI uses).
+    const zoneInfo = TC.ZONES.map((z) => {
       const ok = E.evaluateTask(s, me, { num: m.num, zone: z, branch: m.branch, options: m.options }, m.uid || undefined).ok;
-      return `<button class="btn sm ${m.zone === z ? "on" : ""}" data-act="pl-zone" data-z="${z}">Zone ${z} ${ok ? '<span class="good">●</span>' : '<span class="bad">●</span>'}</button>`;
-    }).join("");
+      return { z, ok, value: ok ? TC.ai.effectValue(s, me, z, req.effects) : -Infinity };
+    });
+    const best = zoneInfo.filter((x) => x.ok && Object.keys(req.effects).length).sort((a, b) => b.value - a.value)[0];
+    const zoneBtns = zoneInfo
+      .map(({ z, ok }) => {
+        const star = best && best.z === z && zoneInfo.filter((x) => x.ok).length > 1;
+        return `<button class="btn sm ${m.zone === z ? "on" : ""}" data-act="pl-zone" data-z="${z}" title="${ok ? "Feasible" : "Not possible now"}${star ? " — biggest payoff of the feasible zones" : ""}">Zone ${z} ${ok ? '<span class="good">●</span>' : '<span class="bad">●</span>'}${star ? ' <span class="beststar">★ best</span>' : ""}</button>`;
+      })
+      .join("");
     const modeNote = task.mode === "P" ? '<div class="banner info">Plan-only task: needs staff only. Its effects apply at the very start of implementation, before any other task.</div>' : task.mode === "E" ? '<div class="banner info">Execute-only task: no staff needed, just the MSCs and capabilities.</div>' : "";
     const branches = task.branches
       ? `<div class="req"><h4>Choose one</h4>${task.branches.map((b) => `<label class="opt ${m.branch === b.key ? "on" : ""}" data-act="pl-branch" data-k="${b.key}"><input type="radio" ${m.branch === b.key ? "checked" : ""}> ${esc(b.label)}</label>`).join("")}</div>`
@@ -141,7 +205,8 @@
         ${task.blocked ? '<span class="chip warnc" title="Not allowed at Assurance 6–7">T×T</span>' : ""}<button class="btn ghost x" data-act="close-modal">✕</button></div>
       <div class="modal-body"><div class="planner">
         <div class="art"><div class="pair"><img src="${task.art[me].front}" data-art="${task.art[me].front}" alt="front"><img src="${task.art[me].back}" data-art="${task.art[me].back}" alt="effects"></div>
-          <div class="req"><h4>Effects on success</h4><div class="effects-line">${eff.join(" ") || '<span class="muted">—</span>'}</div></div>
+          <div class="req"><h4>Effects on success</h4><div class="effects-line">${eff.join(" ") || '<span class="muted">—</span>'}</div>
+            ${impactHtml(s, me, m.zone, req)}</div>
           ${cost.length ? `<div class="req cost"><h4>Cost</h4><div class="effects-line">${cost.join(" ")}</div></div>` : ""}</div>
         <div>
           <div class="req"><h4>Zone</h4><div class="zonepick">${zoneBtns}</div></div>

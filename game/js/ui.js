@@ -10,7 +10,7 @@
   const SAVE_KEY = "theatercomplex.save.v1";
   const App = (TC.app = {
     state: null,
-    ui: { screen: "title", modal: null, overlay: null, toasts: [], busy: false, setup: null, lastPlanner: null, curtain: null },
+    ui: { screen: "title", modal: null, overlay: null, toasts: [], busy: false, setup: null, lastPlanner: null, curtain: null, flashes: {}, snap: null, handFilter: "all" },
   });
 
   // ---------------------------------------------------------------- helpers
@@ -64,8 +64,56 @@
     return r;
   };
 
+  // ---------------------------------------------------------------- change highlighting
+  // Every render compares a snapshot of the visible numbers with the previous
+  // one; changed values flash and show a floating delta for FLASH_MS. Re-renders
+  // during that window resume the animation via a negative animation-delay.
+  const FLASH_MS = 2800;
+  function snapshot(s) {
+    const m = {};
+    TC.TEAMS.forEach((team) => {
+      const t = s.teams[team];
+      m[`${team}.score`] = t.score;
+      m[`${team}.influence`] = t.influence;
+      TC.ZONES.forEach((z) => {
+        m[`${team}.access.${z}`] = t.access[z];
+        m[`${team}.det.${z}`] = R.deterrence(s, team, z);
+        TC.TRACKERS.forEach((tr) => (m[`${team}.${z}.${tr.key}`] = t.zones[z][tr.key]));
+      });
+    });
+    TC.ZONES.forEach((z) => (m[`inst.${z}`] = R.instability(s, z)));
+    return m;
+  }
+  function updateFlashes(s) {
+    const snap = snapshot(s);
+    const now = Date.now();
+    const prev = App.ui.snap;
+    if (prev && App.ui.snapSeed === s.seed)
+      Object.keys(snap).forEach((k) => {
+        if (prev[k] !== undefined && prev[k] !== snap[k]) App.ui.flashes[k] = { delta: snap[k] - prev[k], start: now };
+      });
+    App.ui.snap = snap;
+    App.ui.snapSeed = s.seed;
+    Object.keys(App.ui.flashes).forEach((k) => now - App.ui.flashes[k].start > FLASH_MS && delete App.ui.flashes[k]);
+  }
+  // fx(key) -> { cls, style, html } decorating an element whose value just changed.
+  function fx(key, badWhenUp) {
+    const f = App.ui.flashes[key];
+    if (!f) return { cls: "", html: "", style: "" };
+    const ago = Date.now() - f.start;
+    const good = badWhenUp ? f.delta < 0 : f.delta > 0;
+    const dir = good ? "up" : "down";
+    return {
+      cls: ` flash ${dir}`,
+      style: ` style="--ago:-${ago}ms"`,
+      html: `<span class="delta ${dir}" style="--ago:-${ago}ms">${f.delta > 0 ? "+" : "−"}${Math.abs(f.delta)}</span>`,
+    };
+  }
+  const zoneFlashing = (zone) => Object.keys(App.ui.flashes).some((k) => k.endsWith(`.${zone}`) || k.includes(`.${zone}.`));
+
   // ---------------------------------------------------------------- top-level render
   App.render = function () {
+    if (App.ui.screen === "game" && App.state) updateFlashes(App.state);
     const root = document.getElementById("app");
     const handScroll = root.querySelector(".hand")?.scrollLeft;
     if (App.ui.screen === "title") root.innerHTML = renderTitle();
@@ -163,7 +211,7 @@
 
   App.startGame = function (opts) {
     App.state = E.newGame(opts);
-    App.ui = Object.assign(App.ui, { screen: "game", modal: null, overlay: null, toasts: [], busy: false, lastPlanner: null, curtain: null, crisisAnim: null });
+    App.ui = Object.assign(App.ui, { screen: "game", modal: null, overlay: null, toasts: [], busy: false, lastPlanner: null, curtain: null, crisisAnim: null, flashes: {}, snap: null });
     App.save();
     App.render();
     App.flow();
@@ -188,7 +236,7 @@
       const t = s.teams[team];
       const you = App.humans().length === 1 && App.isHuman(team) ? '<span class="you">YOU</span>' : App.state.controllers[team] === "ai" ? '<span class="you" style="color:var(--muted)">AI</span>' : "";
       return `<div class="side ${K.teamCls(team)}"><span class="name"><span class="marker ${TC.TEAM_INFO[team].marker}"></span> ${TC.TEAM_INFO[team].name} ${you}</span>
-        <span class="pts">${t.score}</span><span class="inf" title="Theater-wide Influence (higher earns +1 point each turn)">◆ ${t.influence} infl.</span></div>`;
+        <span class="pts${fx(team + ".score").cls}"${fx(team + ".score").style}>${t.score}${fx(team + ".score").html}</span><span class="inf${fx(team + ".influence").cls}"${fx(team + ".influence").style} title="Theater-wide Influence (higher earns +1 point each turn)">◆ ${t.influence} infl.${fx(team + ".influence").html}</span></div>`;
     };
     return `<header class="hud">
       <img class="logo" src="img/logo.webp" alt="TheaterComplex">
@@ -272,9 +320,11 @@
         tip = legendTip(key, zone);
       }
       const warn = key === "assurance" ? (i) => i === 1 || i >= 6 : null;
-      return `<tr><td>${K.pips(a, "fourth", false, warn)}</td><td class="val ${lead4 ? "lead" : ""}">${va}</td>
+      const f4 = fx(`fourth.${zone}.${key}`);
+      const f10 = fx(`tenth.${zone}.${key}`);
+      return `<tr class="${f4.cls || f10.cls ? "rowflash" : ""}"${f4.style || f10.style}><td>${K.pips(a, "fourth", false, warn)}</td><td class="val ${lead4 ? "lead" : ""}${f4.cls}"${f4.style}>${va}${f4.html}</td>
         <td class="lab"><span title="${esc(tip)}">${mid}</span></td>
-        <td class="val ${lead10 ? "lead" : ""}">${vb}</td><td>${K.pips(b, "tenth", true, warn)}</td></tr>`;
+        <td class="val ${lead10 ? "lead" : ""}${f10.cls}"${f10.style}>${vb}${f10.html}</td><td>${K.pips(b, "tenth", true, warn)}</td></tr>`;
     };
     const dieBox = (team, pool) => {
       const d = K.pool(pool, 22);
@@ -293,14 +343,14 @@
     const tasks = zoneTasks(s, zone, me);
     const tag4 = zone === "C" ? '<span class="chip t4" title="Fourth Army scores +1 bonus for winning here">★ 4th objective</span>' : "";
     const tag10 = zone === "A" ? '<span class="chip t10" title="Tenth Army scores +1 bonus for winning here">★ 10th objective</span>' : "";
-    return `<section class="zone ${target ? "target" : ""}" data-zone="${zone}" ${target ? `data-act="zone-target" data-z="${zone}"` : ""} id="zone-${zone}">
+    return `<section class="zone ${target ? "target" : ""} ${zoneFlashing(zone) ? "zflash" : ""}" data-zone="${zone}" ${target ? `data-act="zone-target" data-z="${zone}"` : ""} id="zone-${zone}">
       <div class="zone-head"><h2>ZONE ${zone}</h2><div class="sub">${sub}</div><div class="tags">${tag4}${tag10}</div></div>
       <div class="zone-body">
         <div class="faceoff">
-          <div class="det">${K.die(p4.theater[0].sides, { size: 30, title: "Fourth Army Deterrence die" })}<div><div class="num c4">${inst.d4}</div><div class="lbl">Deterrence</div></div></div>
+          <div class="det">${K.die(p4.theater[0].sides, { size: 30, title: "Fourth Army Deterrence die" })}<div><div class="num c4${fx(`fourth.det.${zone}`).cls}"${fx(`fourth.det.${zone}`).style}>${inst.d4}${fx(`fourth.det.${zone}`).html}</div><div class="lbl">Deterrence</div></div></div>
           <div class="instab" title="Instability = |deterrence gap| ${inst.base} + assurance ${inst.assurance}${inst.reduced ? " − influence " + inst.reduced : ""}. Higher Instability makes violent crises more likely." id="instab-${zone}">
-            <div class="lbl">Instability</div><div class="v ${inst.total >= 4 ? "bad" : inst.total >= 2 ? "" : "good"}">${inst.total}</div></div>
-          <div class="det right"><div style="text-align:right"><div class="num c10">${inst.d10}</div><div class="lbl">Deterrence</div></div>${K.die(p10.theater[0].sides, { size: 30, title: "Tenth Army Deterrence die" })}</div>
+            <div class="lbl">Instability</div><div class="v ${inst.total >= 4 ? "bad" : inst.total >= 2 ? "" : "good"}${fx(`inst.${zone}`, true).cls}"${fx(`inst.${zone}`, true).style}>${inst.total}${fx(`inst.${zone}`, true).html}</div></div>
+          <div class="det right"><div style="text-align:right"><div class="num c10${fx(`tenth.det.${zone}`).cls}"${fx(`tenth.det.${zone}`).style}>${inst.d10}${fx(`tenth.det.${zone}`).html}</div><div class="lbl">Deterrence</div></div>${K.die(p10.theater[0].sides, { size: 30, title: "Tenth Army Deterrence die" })}</div>
         </div>
         <div title="Chance of each crisis type at this Instability (provisional table)">
           <div class="oddsbar">${["SQ", "SOF", "LIM", "LSCO"].map((k) => `<i class="${k}" style="width:${odds[k]}%"></i>`).join("")}</div>
@@ -317,7 +367,7 @@
           ${row("intel", "Intelligence", "cmp")}
           ${row("comms", "Communications", "cmp")}
           ${row("protection", "Protection", "cmp")}
-          <tr><td></td><td class="val c4">${s.teams.fourth.access[zone]}</td><td class="lab"><span title="Access in this zone — spent by agreements, stockage and police tasks">Access</span></td><td class="val c10">${s.teams.tenth.access[zone]}</td><td></td></tr>
+          <tr><td></td><td class="val c4${fx(`fourth.access.${zone}`).cls}"${fx(`fourth.access.${zone}`).style}>${s.teams.fourth.access[zone]}${fx(`fourth.access.${zone}`).html}</td><td class="lab"><span title="Access in this zone — spent by agreements, stockage and police tasks">Access</span></td><td class="val c10${fx(`tenth.access.${zone}`).cls}"${fx(`tenth.access.${zone}`).style}>${s.teams.tenth.access[zone]}${fx(`tenth.access.${zone}`).html}</td><td></td></tr>
         </table>
         <div class="readiness">${dieBox("fourth", p4)}${dieBox("tenth", p10)}</div>
         <div class="forces">${forces("fourth")}${forces("tenth")}<span style="flex:1"></span><button class="btn sm" data-act="mat" data-z="${zone}">Capability mat</button></div>
@@ -422,18 +472,61 @@
       <button class="btn primary" data-act="asos-done" ${E.asosComplete(s, me) ? "" : "disabled"}>Proceed to planning →</button></div></footer>`;
   }
 
+  const EFFECT_SHORT = {
+    influence: "Infl", access: "Access", assurance: "Assur", partnerCap: "P.Cap", infrastructure: "Infra",
+    interop: "Interop", intel: "Intel", stockage: "Stock", comms: "Comms", protection: "Prot",
+  };
+  // Every tracker a task can touch, including its OR paths and optional additions.
+  function taskEffectKeys(task) {
+    const keys = new Set(Object.keys(task.effects));
+    (task.branches || []).concat(task.options || []).forEach((p) => {
+      Object.keys(p.effects || {}).forEach((k) => keys.add(k));
+      Object.keys(p.oppEffects || {}).forEach((k) => keys.add(k));
+    });
+    return [...keys];
+  }
+  function effectSummary(task) {
+    const fmt = (eff, opp) =>
+      Object.entries(eff || {})
+        .filter(([, v]) => v)
+        .map(([k, v]) => `<span class="te ${opp ? "opp" : ""}">${opp ? "Foe " : ""}${EFFECT_SHORT[k]}${v > 0 ? "+" : "−"}${Math.abs(v)}</span>`)
+        .join("");
+    if (task.special === "rsoi") return `<span class="te">+3 GFM forces</span>`;
+    let html = fmt(task.effects);
+    if (task.branches) html += task.branches.map((b) => fmt(b.effects) + fmt(b.oppEffects, true)).join('<span class="tor">or</span>');
+    if (task.options) html += task.options.map((o) => `<span class="te opt" title="${esc(o.label)}">opt ${EFFECT_SHORT[Object.keys(o.effects)[0]]}+</span>`).join("");
+    return html;
+  }
+
   function dockPlanning(s, me) {
     const plan = s.plans[me];
     if (!App.isHuman(me) || plan.ready) {
       return `<footer class="dock"><div class="col grow"><h3>Planning</h3><div class="muted">${plan.ready ? "Your plan is submitted. Waiting for the other staff…" : "The AI staff is planning…"}</div></div></footer>`;
     }
+    const filter = App.ui.handFilter || "all";
     const hand = TC.TASKS.map((task) => {
-      const planned = plan.tasks.some((t) => t.num === task.num);
-      const anyOk = !planned && TC.ZONES.some((z) => E.evaluateTask(s, me, { num: task.num, zone: z, branch: task.branches?.[0].key }).ok);
+      const planned = plan.tasks.find((t) => t.num === task.num);
+      const zoneOk = TC.ZONES.map((z) => !planned && (task.branches || [{ key: null }]).some((b) => E.evaluateTask(s, me, { num: task.num, zone: z, branch: b.key }).ok));
+      const anyOk = zoneOk.some(Boolean);
+      const keys = taskEffectKeys(task);
+      if (filter === "ready" && !anyOk) return "";
+      if (filter !== "all" && filter !== "ready" && !keys.includes(filter)) return "";
       const mode = task.mode === "P" ? "Plan-only" : task.mode === "E" ? "Execute-only" : "";
-      return `<div class="taskcard ${planned ? "planned" : ""} ${!anyOk && !planned ? "blocked" : ""}" data-act="task-open" data-num="${task.num}" data-art="${task.art[me].front}" title="${esc(task.name)}${mode ? " (" + mode + ")" : ""}">
-        <img src="${task.art[me].front}" alt="${esc(task.name)}" loading="lazy">${planned ? '<span class="ok">✔ planned</span>' : anyOk ? '<span class="ok" style="color:#9be7b9">ready</span>' : '<span class="ok" style="color:#ffb3b0">needs forces</span>'}</div>`;
+      const dots = planned
+        ? `<span class="chip goodc" style="padding:0 6px">✔ Zone ${planned.zone}</span>`
+        : TC.ZONES.map((z, i) => `<span class="zdot ${zoneOk[i] ? "ok" : ""}" title="Zone ${z}: ${zoneOk[i] ? "can plan here" : "not possible now"}">${z}</span>`).join("");
+      const cost = Object.entries(task.cost)
+        .map(([k, v]) => `<span class="tcost">${k === "influence" ? "◆" : "Acc"}−${v}</span>`)
+        .join("");
+      return `<div class="taskcard tc2 ${planned ? "planned" : ""} ${!anyOk && !planned ? "blocked" : ""}" data-act="task-open" data-num="${task.num}" data-art="${task.art[me].front}" title="${esc(task.name)}${mode ? " (" + mode + ")" : ""} — click to plan">
+        <img src="${task.art[me].front}" alt="" loading="lazy">
+        <div class="tinfo"><div class="tname"><b>${task.num}</b> ${esc(task.name)}${task.mode !== "N" ? ` <span class="tmode">${task.mode}</span>` : ""}</div>
+          <div class="teff">${effectSummary(task)}</div>
+          <div class="tfoot">${dots}${cost}</div></div></div>`;
     }).join("");
+    const filters = [["all", "All"], ["ready", "Ready"], ["intel", "Intel"], ["comms", "Comms"], ["protection", "Protection"], ["partnerCap", "Partner Cap"], ["infrastructure", "Infra"], ["interop", "Interop"], ["stockage", "Stockage"], ["assurance", "Assurance"], ["influence", "Influence"], ["access", "Access"]]
+      .map(([k, l]) => `<button class="btn sm ${filter === k ? "on" : ""}" data-act="hand-filter" data-k="${k}">${l}</button>`)
+      .join("");
     const list = plan.tasks
       .map((t) => {
         const task = TC.taskByNum(t.num);
@@ -444,7 +537,9 @@
     const rff = E.rffProjected(s, me);
     const timer = s.settings.planTimerMinutes ? `<span class="chip" id="plan-timer">⏱ --:--</span>` : "";
     return `<footer class="dock">
-      <div class="col grow" style="min-width:0"><h3>Task cards <span class="chip">${plan.tasks.length} / ${s.taskLimit} planned</span>${timer}<span class="muted" style="text-transform:none;letter-spacing:0;font-size:12px">Click a card to plan it · hover to enlarge</span></h3><div class="hand" id="hand">${hand}</div></div>
+      <div class="col grow" style="min-width:0"><h3>Task cards <span class="chip">${plan.tasks.length} / ${s.taskLimit} planned</span>${timer}<span class="muted" style="text-transform:none;letter-spacing:0;font-size:12px">Click a card to plan it · hover to enlarge</span></h3>
+        <div class="seg handfilters">${filters}</div>
+        <div class="hand" id="hand">${hand || `<div class="muted" style="padding:20px">No task cards match this filter.</div>`}</div></div>
       <div class="col" style="width:290px"><h3>Campaign ${K.teamChip(me)}</h3><div class="col scroll" style="gap:6px;max-height:150px">${list || '<div class="muted">No tasks yet.</div>'}</div>
         <div class="btn-row" style="margin-top:auto"><button class="btn" data-act="forces" id="btn-forces">Force management <span class="chip">RFF ${rff}/${E.RFF_LIMIT}</span></button>
         <button class="btn primary ${plan.tasks.length ? "pulse" : ""}" data-act="submit" id="btn-submit" title="${esc(issues.join(" "))}">Submit plan</button></div>
@@ -556,6 +651,7 @@
     initiative(o) {
       const s = App.state;
       const r = o.result;
+      if (!r) o = Object.assign({}, o, { rolling: true });
       const plan = r && r.planOnly.length ? `<p>Plan-only tasks took effect first: ${r.planOnly.map((p) => `${K.teamChip(p.team, TC.taskByNum(s.plans[p.team].tasks.find((t) => t.uid === p.uid).num).name)}`).join(" ")}</p>` : "";
       return `<div class="stage"><div class="kicker">Campaign implementation</div><h1>INITIATIVE</h1>
         <div class="bigdie"><div>${K.die(10, { size: 80, value: o.rolling ? "?" : r.initiative.fourth, cls: o.rolling ? "rolling" : "land" })}<div class="who c4">Fourth Army</div></div>
@@ -704,11 +800,15 @@
   }
 
   async function rollLimit() {
+    if (App.ui.rolling) return;
     App.ui.rolling = true;
+    App.ui.busy = true;
     App.render();
     await K.sleep(900);
     App.ui.rolling = false;
+    App.ui.busy = false;
     const res = E.rollTaskLimit(App.state);
+    if (!res) return App.render();
     App.ui.overlay = { type: "limitResult", roll: res.roll, limit: res.limit, asos: res.asos };
     App.save();
     App.render();
@@ -722,10 +822,18 @@
 
   async function startImplementation() {
     const s = App.state;
+    // Lock the flow so a re-render during the roll can't start this twice.
+    App.ui.busy = true;
     App.ui.overlay = { type: "initiative", rolling: true };
     App.render();
     await K.sleep(1000);
     const res = E.beginImplementation(s);
+    App.ui.busy = false;
+    if (!res) {
+      App.ui.overlay = null;
+      App.render();
+      return;
+    }
     App.ui.overlay = { type: "initiative", rolling: false, result: res };
     App.save();
     App.render();
@@ -892,6 +1000,10 @@
       const other = App.humans().find((t) => !E.asosComplete(s, t));
       if (other) App.ui.asosConfirmed = false;
       App.flow();
+    },
+    "hand-filter"(el) {
+      App.ui.handFilter = el.dataset.k;
+      App.render();
     },
     "task-open"(el) {
       TC.planner.open(Number(el.dataset.num));
