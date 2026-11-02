@@ -87,6 +87,8 @@
     if (d10 <= row.lim) return "LIM";
     return "LSCO";
   };
+  // Severity band of an Instability value: 0 = calm row, 1 = middle, 2 = worst.
+  R.instabilityBand = (instability) => TC.CRISIS_TABLE.rows.indexOf(R.crisisRow(instability));
   R.crisisOdds = function (instability) {
     const row = R.crisisRow(instability);
     return {

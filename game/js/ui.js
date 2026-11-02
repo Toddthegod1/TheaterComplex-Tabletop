@@ -49,11 +49,21 @@
   App.toast = function (html, team, ms = 4200) {
     const id = Math.random().toString(36).slice(2);
     App.ui.toasts.push({ id, html, team });
+    if (App.ui.toasts.length > 4) App.ui.toasts.splice(0, App.ui.toasts.length - 4);
     renderToasts();
     setTimeout(() => {
       App.ui.toasts = App.ui.toasts.filter((t) => t.id !== id);
       renderToasts();
     }, ms / Math.max(0.5, App.speed() || 0.5));
+  };
+
+  // In-game replacements for alert() and confirm().
+  App.notify = function (text, title = "Not allowed") {
+    const lines = [].concat(text).filter(Boolean);
+    App.toast(`<div class="t"><b class="bad">${esc(title)}</b><br>${lines.map(esc).join("<br>")}</div>`, null, 5000);
+  };
+  App.confirm = function (opts) {
+    App.openModal(Object.assign({ type: "confirm" }, opts));
   };
 
   App.do = function (fn) {
@@ -226,7 +236,7 @@
   function renderHud(s) {
     const me = App.me();
     const idx = E.phaseIndex(s);
-    const phases = E.PHASES.map((p, i) => `<span class="ph ${i < idx || s.phase === "gameOver" ? "done" : ""} ${i === idx ? "now" : ""}">${p.label}</span>`).join('<span class="sep">›</span>');
+    const phases = E.PHASES.map((p, i) => `<span class="ph ${i < idx || s.phase === "gameOver" ? "done" : ""} ${i === idx ? "now" : ""}" title="${p.label}"><span class="lf">${p.label}</span><span class="ls">${p.short}</span></span>`).join('<span class="sep">›</span>');
     const track = Array.from({ length: s.settings.turns }, (_, i) => {
       const n = i + 1;
       return `<span class="${n % 2 === 0 ? "even" : ""} ${n < s.turn ? "past" : ""} ${n === s.turn ? "now" : ""}" title="Turn ${n}${n % 2 === 0 ? " — Assurance & Interoperability degrade" : ""}">${n}</span>`;
@@ -234,7 +244,7 @@
     const side = (team) => {
       const t = s.teams[team];
       const you = App.humans().length === 1 && App.isHuman(team) ? '<span class="you">YOU</span>' : App.state.controllers[team] === "ai" ? '<span class="you" style="color:var(--muted)">AI</span>' : "";
-      return `<div class="side ${K.teamCls(team)}"><span class="name"><span class="marker ${TC.TEAM_INFO[team].marker}"></span> ${TC.TEAM_INFO[team].name} ${you}</span>
+      return `<div class="side ${K.teamCls(team)}"><span class="name"><span class="marker ${TC.TEAM_INFO[team].marker}"></span> <span class="lf">${TC.TEAM_INFO[team].name}</span><span class="ls">${TC.TEAM_INFO[team].short}</span> ${you}</span>
         <span class="pts${fx(team + ".score").cls}"${fx(team + ".score").style}>${t.score}${fx(team + ".score").html}</span><span class="inf${fx(team + ".influence").cls}"${fx(team + ".influence").style} title="Theater-wide Influence (higher earns +1 point each turn)">◆ ${t.influence} infl.${fx(team + ".influence").html}</span></div>`;
     };
     return `<header class="hud">
@@ -245,7 +255,7 @@
       <span class="spacer"></span>
       ${s.taskLimit ? `<span class="chip" title="Adjudicator's d6 roll (minimum 3)">Task limit ${s.taskLimit}</span>` : ""}
       <div class="scorebox">${side("fourth")}${side("tenth")}</div>
-      <button class="btn sm ghost" data-act="codex" title="Rules Codex">📖 Rules</button>
+      <button class="btn sm ghost" data-act="codex" title="Rules Codex">📖 <span class="lf">Rules</span></button>
       <button class="btn sm ghost" data-act="menu" title="Menu">☰</button>
     </header>`;
   }
@@ -287,7 +297,7 @@
     const odds = R.crisisOdds(inst.total);
     const p4 = R.readiness(s, "fourth", zone);
     const p10 = R.readiness(s, "tenth", zone);
-    const sub = { A: "Fourth Army's near zone · Tenth Army objective", B: "Central zone · balanced forces", C: "Tenth Army's near zone · Fourth Army objective" }[zone];
+    const sub = { A: "Near Fourth Army's homeland", B: "Central · evenly matched", C: "Near Tenth Army's homeland" }[zone];
     const row = (key, label, kind) => {
       const a = t4[key];
       const b = t10[key];
@@ -347,13 +357,13 @@
       <div class="zone-body">
         <div class="faceoff">
           <div class="det">${K.die(p4.theater[0].sides, { size: 30, title: "Fourth Army Deterrence die" })}<div><div class="num c4${fx(`fourth.det.${zone}`).cls}"${fx(`fourth.det.${zone}`).style}>${inst.d4}${fx(`fourth.det.${zone}`).html}</div><div class="lbl">Deterrence</div></div></div>
-          <div class="instab" title="Instability = |deterrence gap| ${inst.base} + assurance ${inst.assurance}${inst.reduced ? " − influence " + inst.reduced : ""}. Higher Instability makes violent crises more likely." id="instab-${zone}">
-            <div class="lbl">Instability</div><div class="v ${inst.total >= 4 ? "bad" : inst.total >= 2 ? "" : "good"}${fx(`inst.${zone}`, true).cls}"${fx(`inst.${zone}`, true).style}>${inst.total}${fx(`inst.${zone}`, true).html}</div></div>
+          <div class="instab" title="Instability = |deterrence gap| ${inst.base} + assurance ${inst.assurance}${inst.reduced ? " − influence " + inst.reduced : ""}. The crisis table uses three bands: 0–1 calm, 2–4 tense, 5+ volatile." id="instab-${zone}">
+            <div class="lbl">Instability</div><div class="v ${["good", "warn", "bad"][R.instabilityBand(inst.total)]}${fx(`inst.${zone}`, true).cls}"${fx(`inst.${zone}`, true).style}>${inst.total}${fx(`inst.${zone}`, true).html}</div><div class="bandlbl">${TC.CRISIS_BANDS[R.instabilityBand(inst.total)]}</div></div>
           <div class="det right"><div style="text-align:right"><div class="num c10${fx(`tenth.det.${zone}`).cls}"${fx(`tenth.det.${zone}`).style}>${inst.d10}${fx(`tenth.det.${zone}`).html}</div><div class="lbl">Deterrence</div></div>${K.die(p10.theater[0].sides, { size: 30, title: "Tenth Army Deterrence die" })}</div>
         </div>
         <div title="Chance of each crisis type at this Instability ">
           <div class="oddsbar">${["SQ", "SOF", "LIM", "LSCO"].map((k) => `<i class="${k}" style="width:${odds[k]}%"></i>`).join("")}</div>
-          <div class="oddslegend"><span>Status quo ${odds.SQ}%</span><span>Show of force ${odds.SOF}%</span><span>Ltd op ${odds.LIM}%</span><span>LSCO ${odds.LSCO}%</span></div>
+          <div class="oddslegend"><span>Status quo ${odds.SQ}%</span><span>Show of force ${odds.SOF}%</span><span>Limited op ${odds.LIM}%</span><span>LSCO ${odds.LSCO}%</span></div>
         </div>
         <table class="trk">
           ${row("assurance", "Assurance", "cmp0")}
@@ -523,7 +533,7 @@
           <div class="teff">${effectSummary(task)}</div>
           <div class="tfoot">${dots}${cost}</div></div></div>`;
     }).join("");
-    const filters = [["all", "All"], ["ready", "Ready"], ["intel", "Intel"], ["comms", "Comms"], ["protection", "Protection"], ["partnerCap", "Partner Cap"], ["infrastructure", "Infra"], ["interop", "Interop"], ["stockage", "Stockage"], ["assurance", "Assurance"], ["influence", "Influence"], ["access", "Access"]]
+    const filters = [["all", "All"], ["ready", "Plannable now"], ["intel", "Intel"], ["comms", "Comms"], ["protection", "Protection"], ["partnerCap", "Partner Cap"], ["infrastructure", "Infra"], ["interop", "Interop"], ["stockage", "Stockage"], ["assurance", "Assurance"], ["influence", "Influence"], ["access", "Access"]]
       .map(([k, l]) => `<button class="btn sm ${filter === k ? "on" : ""}" data-act="hand-filter" data-k="${k}">${l}</button>`)
       .join("");
     const list = plan.tasks
@@ -584,21 +594,41 @@
             const task = TC.taskByNum(t.num);
             const canD = E.canDisrupt(s, active, t.uid);
             const over = t.commands.filter((id) => (impl.commandMarkers[id] || 0) + 1 > TC.MSC_FREE_SLOTS);
-            return `<div class="col" style="width:118px;gap:4px"><div class="taskcard" style="width:118px" data-art="${task.art[active].front}"><img src="${task.art[active].front}" alt="" style="aspect-ratio:3/3.4;object-position:top"></div>
-            <div class="chip" style="justify-content:center">Zone ${t.zone}${over.length ? ` · <span class="bad">roll d6!</span>` : ""}</div>
+            const req = R.taskRequirement(task, t.branch, t.options);
+            const fmt = (eff, opp) =>
+              Object.entries(eff)
+                .filter(([, v]) => v)
+                .map(([k, v]) => `<span class="te ${opp ? "opp" : ""}">${opp ? "Foe " : ""}${EFFECT_SHORT[k]}${v > 0 ? "+" : "−"}${Math.abs(v)}</span>`)
+                .join("");
+            const eff = task.special === "rsoi" ? '<span class="te">+3 GFM forces</span>' : fmt(req.effects) + fmt(req.oppEffects, true);
+            const n = over.length ? (impl.commandMarkers[over[0]] || 0) + 1 : 0;
+            return `<div class="col execcard"><div class="taskcard tc2" data-art="${task.art[active].front}" title="${esc(task.name)}: hover to see the card">
+              <img src="${task.art[active].front}" alt="" loading="lazy">
+              <div class="tinfo"><div class="tname"><b>${task.num}</b> ${esc(task.name)}</div><div class="teff">${eff || '<span class="muted" style="font-size:11px">no tracker change</span>'}</div>
+              <div class="tfoot"><span class="tzone">Zone ${t.zone}</span></div></div></div>
+            ${over.length ? `<div class="chip badc" style="justify-content:center" title="${esc(R.cmd(over[0]).short)} is over-tasked: this task only happens on a d6 roll of ${n + 1}+">Over-tasked: needs d6 ${n + 1}+</div>` : ""}
             <button class="btn sm primary" data-act="exec" data-uid="${t.uid}">Execute</button>
             ${canD ? `<button class="btn sm danger" data-act="exec-disrupt" data-uid="${t.uid}" title="Subtract this task's effects from the enemy in Zone ${t.zone} instead">⚡ Play as Disruption</button>` : ""}
-            <button class="btn sm ghost" data-act="standdown" data-uid="${t.uid}">Stand down</button></div>`;
+            <button class="btn sm ghost" data-act="standdown" data-uid="${t.uid}" title="Skip this task this year. Its Influence and Access are refunded.">Stand down</button></div>`;
           })
           .join("")
       : `<div class="muted" style="padding:20px">${TC.TEAM_INFO[active].name} is executing…</div>`;
     const spend = mine
-      ? TC.ZONES.map((z) => `<button class="btn sm" data-act="spend" data-z="${z}" ${s.teams[active].influence >= 3 && R.instability(s, z) > 0 ? "" : "disabled"}>Zone ${z}: −1 Instability (3 ◆)</button>`).join("")
+      ? TC.ZONES.map((z) => {
+          // The crisis table only cares about bands, so say whether a spend changes anything.
+          const inst = R.instability(s, z);
+          const can = s.teams[active].influence >= 3 && inst > 0;
+          const b0 = R.instabilityBand(inst);
+          const b1 = R.instabilityBand(Math.max(0, inst - 1));
+          const note = !inst ? "already 0" : b1 < b0 ? `→ ${TC.CRISIS_BANDS[b1]}` : `stays ${TC.CRISIS_BANDS[b0]}`;
+          const tip = !inst ? "Instability is already 0." : b1 < b0 ? `Moves Zone ${z} into the ${TC.CRISIS_BANDS[b1]} row of the crisis table: fewer violent crises.` : `Zone ${z} stays in the ${TC.CRISIS_BANDS[b0]} row (${TC.crisisRowLabel(R.crisisRow(inst))}), so the crisis odds don't change.`;
+          return `<button class="btn sm spendbtn ${can && b1 < b0 ? "useful" : ""}" data-act="spend" data-z="${z}" title="${esc(tip)}" ${can ? "" : "disabled"}><span>Zone ${z}: ${inst} → ${Math.max(0, inst - 1)}</span><span class="note">${note}</span></button>`;
+        }).join("")
       : "";
     return `<footer class="dock">
       <div class="col grow" style="min-width:0"><h3>Initiative ${K.teamChip(active)} <span class="muted" style="text-transform:none;letter-spacing:0;font-size:12px">${remaining.length} task${remaining.length === 1 ? "" : "s"} left · Disruption ${s.teams[active].disruptionUsed ? "used" : "available"}</span></h3>
         <div class="hand" style="align-items:flex-start">${cards}</div></div>
-      ${mine ? `<div class="col" style="width:240px"><h3>Influence</h3><div class="muted" style="font-size:12px">${s.teams[active].influence} Influence available</div>${spend}</div>` : ""}
+      ${mine ? `<div class="col" style="width:240px"><h3>Reduce Instability</h3><div class="muted" style="font-size:12px">${s.teams[active].influence} Influence available · 3 ◆ cuts a zone's Instability by 1 until year end</div>${spend}</div>` : ""}
       ${commandBoards(s, active)}
     </footer>`;
   }
@@ -624,7 +654,7 @@
 
   function curtainHtml(team) {
     return `<div class="stage"><div class="kicker">Hand-off</div><h1>${TC.TEAM_INFO[team].name}</h1>
-      <p>Pass the controls to the <b>${TC.TEAM_INFO[team].name}</b> commander. The ${TC.TEAM_INFO[TC.other(team)].name} staff should look away: planning is secret until execution.</p>
+      <p>Pass the controls to the <b>${TC.TEAM_INFO[team].name}</b> commander.${App.state.phase === "planning" ? ` The ${TC.TEAM_INFO[TC.other(team)].name} staff should look away: planning is secret until execution.` : " It's your turn to support this year's ASOS requests."}</p>
       <button class="btn primary lg" data-act="curtain-ok">I am the ${TC.TEAM_INFO[team].name} commander</button></div>`;
   }
 
@@ -686,17 +716,27 @@
       const minS = Math.min(0, ...hist.map((h) => Math.min(h.score.fourth, h.score.tenth)));
       const W = 520;
       const H = 200;
-      const x = (i) => 30 + (i * (W - 50)) / Math.max(1, hist.length);
+      const x = (i) => 30 + (i * (W - 70)) / Math.max(1, hist.length);
       const y = (v) => H - 20 - ((v - minS) * (H - 40)) / (maxS - minS || 1);
-      const line = (team, color) => `<polyline fill="none" stroke="${color}" stroke-width="3" points="${[`${x(0)},${y(0)}`].concat(hist.map((h, i) => `${x(i + 1)},${y(h.score[team])}`)).join(" ")}"/>` + hist.map((h, i) => `<circle cx="${x(i + 1)}" cy="${y(h.score[team])}" r="4" fill="${color}"/>`).join("");
+      const last = hist.length ? hist[hist.length - 1].score : { fourth: 0, tenth: 0 };
+      const line = (team, color) => {
+        // Final score label, nudged apart when both lines end close together.
+        const gap = Math.abs(y(last.fourth) - y(last.tenth)) < 14;
+        const ly = y(last[team]) + (gap ? (last[team] >= last[TC.other(team)] ? -8 : 10) : 4);
+        return `<polyline fill="none" stroke="${color}" stroke-width="3" points="${[`${x(0)},${y(0)}`].concat(hist.map((h, i) => `${x(i + 1)},${y(h.score[team])}`)).join(" ")}"/>` +
+          hist.map((h, i) => `<circle cx="${x(i + 1)}" cy="${y(h.score[team])}" r="4" fill="${color}"><title>${TC.TEAM_INFO[team].name}, turn ${h.turn}: ${h.score[team]}</title></circle>`).join("") +
+          `<text x="${x(hist.length) + 8}" y="${ly}" fill="${color}" font-size="13" font-weight="700">${last[team]}</text>`;
+      };
+      const ticks = [minS, Math.round((minS + maxS) / 2), maxS].filter((v, i, a) => a.indexOf(v) === i);
+      const grid = ticks.map((v) => `<line x1="30" x2="${W - 30}" y1="${y(v)}" y2="${y(v)}" stroke="#26313b" stroke-dasharray="3 4"/><text x="24" y="${y(v) + 4}" fill="#93a1ad" font-size="11" text-anchor="end">${v}</text>`).join("");
       const rows = hist
         .map((h) => `<tr><td>${h.turn}</td>${h.crisis.map((c) => `<td><span class="chip ct-${c.type}" style="color:#fff;border:0">${c.type}</span> ${c.winner ? `<span class="${c.winner === "fourth" ? "c4" : "c10"}">${TC.TEAM_INFO[c.winner].short}</span>` : "tie"}</td>`).join("")}<td>${h.score.fourth}–${h.score.tenth}</td></tr>`)
         .join("");
       return `<div class="stage" style="max-width:1000px"><div class="kicker">After-action review</div><h1>${w ? TC.TEAM_INFO[w].name.toUpperCase() + " WINS" : "DRAW"}</h1>
         <p style="font-size:20px"><b class="c4">${s.teams.fourth.score}</b> — <b class="c10">${s.teams.tenth.score}</b></p>
-        <div class="endgrid"><svg class="chart" viewBox="0 0 ${W} ${H}"><line x1="30" x2="${W - 10}" y1="${y(0)}" y2="${y(0)}" stroke="#3a4651"/>${line("fourth", "#5aa2ff")}${line("tenth", "#ff9f5a")}
+        <div class="endgrid"><div><div class="chartlegend"><span class="c4">● Fourth Army</span><span class="c10">● Tenth Army</span><span class="muted">score after each turn</span></div><svg class="chart" viewBox="0 0 ${W} ${H}">${grid}<line x1="30" x2="${W - 30}" y1="${y(0)}" y2="${y(0)}" stroke="#3a4651"/>${line("fourth", "#5aa2ff")}${line("tenth", "#ff9f5a")}
           ${hist.map((h, i) => `<text x="${x(i + 1)}" y="${H - 4}" fill="#93a1ad" font-size="11" text-anchor="middle">T${h.turn}</text>`).join("")}</svg>
-          <table class="hist"><tr><th>Turn</th><th>Zone A</th><th>Zone B</th><th>Zone C</th><th>Score</th></tr>${rows}</table></div>
+          </div><div><table class="hist"><tr><th>Turn</th><th>Zone A</th><th>Zone B</th><th>Zone C</th><th>Score</th></tr>${rows}</table>${K.crisisLegend()}</div></div>
         <div class="btn-row" style="justify-content:center;margin-top:20px"><button class="btn" data-act="title">Main menu</button><button class="btn primary lg" data-act="setup">New campaign</button></div></div>`;
     },
     menu() {
@@ -739,7 +779,15 @@
           App.save();
           App.render();
           App.flow();
-        } else App.render();
+        } else {
+          // Hot-seat: show a hand-off screen whenever ASOS passes to the other commander.
+          const key = `${s.turn}:${App.me()}`;
+          if (humans.length === 2 && App.ui.asosHandoff !== key) {
+            App.ui.asosHandoff = key;
+            App.ui.curtain = App.me();
+          }
+          App.render();
+        }
         break;
       case "planning": {
         TC.TEAMS.forEach((t) => !App.isHuman(t) && !s.plans[t].ready && AI.plan(s, t));
@@ -761,6 +809,7 @@
         if (s.impl.done) {
           if (!humans.length) {
             await pace(600);
+            if (App.state !== s) return;
             E.beginCrisis(s);
             App.save();
             App.render();
@@ -771,8 +820,9 @@
         if (!App.isHuman(s.impl.active)) {
           App.ui.busy = true;
           await pace(900);
-          const res = AI.takeInitiative(s, s.impl.active);
           App.ui.busy = false;
+          if (App.state !== s) return;
+          const res = AI.takeInitiative(s, s.impl.active);
           if (res) taskToast(res);
           App.save();
           App.render();
@@ -803,16 +853,19 @@
     App.ui.rolling = true;
     App.ui.busy = true;
     App.render();
+    const s = App.state;
     await K.sleep(900);
     App.ui.rolling = false;
     App.ui.busy = false;
-    const res = E.rollTaskLimit(App.state);
+    if (App.state !== s) return; // the player left this game mid-roll
+    const res = E.rollTaskLimit(s);
     if (!res) return App.render();
     App.ui.overlay = { type: "limitResult", roll: res.roll, limit: res.limit, asos: res.asos };
     App.save();
     App.render();
     if (!App.humans().length) {
       await K.sleep(1400 * App.speed());
+      if (App.state !== s) return;
       App.ui.overlay = null;
       App.render();
       App.flow();
@@ -826,8 +879,9 @@
     App.ui.overlay = { type: "initiative", rolling: true };
     App.render();
     await K.sleep(1000);
-    const res = E.beginImplementation(s);
     App.ui.busy = false;
+    if (App.state !== s) return;
+    const res = E.beginImplementation(s);
     if (!res) {
       App.ui.overlay = null;
       App.render();
@@ -838,6 +892,7 @@
     App.render();
     if (!App.humans().length) {
       await K.sleep(1400 * App.speed());
+      if (App.state !== s) return;
       App.ui.overlay = null;
       App.render();
       App.flow();
@@ -972,7 +1027,7 @@
           App.render();
           App.flow();
         } catch (e) {
-          alert("Could not load that file: " + e.message);
+          App.notify("Could not load that file: " + e.message, "Load failed");
         }
       };
       input.click();
@@ -1023,11 +1078,15 @@
     submit() {
       const s = App.state;
       const me = App.me();
-      if (!s.plans[me].tasks.length && !confirm("Submit a plan with no tasks?")) return;
+      const confirming = App.ui.modal && App.ui.modal.type === "confirm";
+      if (!s.plans[me].tasks.length && !confirming) {
+        return App.confirm({ title: "Submit an empty plan?", body: "You haven't planned any tasks, so your army will do nothing this year.", yes: "Submit anyway", act: "submit" });
+      }
+      App.ui.modal = null;
       const r = E.setReady(s, me, true);
       if (!r.ok) {
-        alert(r.issues.join("\n"));
-        return;
+        App.render();
+        return App.notify(r.issues, "Plan not ready");
       }
       App.ui.lastPlanner = me;
       App.save();
@@ -1053,7 +1112,7 @@
     },
     spend(el) {
       const r = E.spendInfluence(App.state, App.state.impl.active, el.dataset.z);
-      if (!r.ok) alert(r.error);
+      if (!r.ok) App.notify(r.error);
       App.save();
       App.render();
     },

@@ -75,6 +75,12 @@
       <div class="detv" style="color:#8a5a1a;font-size:9px">${K.esc(c.short.replace(/ (Cmd|Bde)$/, ""))}</div></div>`;
   };
 
+  // Colour key for the crisis-type abbreviations used in tables.
+  K.crisisLegend = () =>
+    `<div class="clegend">${Object.values(TC.CRISIS_TYPES)
+      .map((c) => `<span><i class="ct-${c.key}">${c.key}</i>${c.key === "LSCO" ? "Large-scale combat" : c.name}</span>`)
+      .join("")}</div>`;
+
   K.taskArt = (team, num, side = "front") => TC.taskByNum(num).art[team][side];
 
   K.effectChips = function (effects, sign = 1) {
@@ -100,6 +106,7 @@
       const el = e.target.closest("[data-art]");
       if (!el || el.closest(".preview")) return;
       const art = el.getAttribute("data-art");
+      if (!art) return;
       if (!previewEl) {
         previewEl = document.createElement("div");
         previewEl.className = "preview";

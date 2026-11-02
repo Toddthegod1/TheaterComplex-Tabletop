@@ -25,7 +25,7 @@
         return `<tr class="${isRow ? "row" : ""}"><td class="rl">${label}</td>${cells}</tr>`;
       })
       .join("");
-    return `<table class="ctable"><caption class="muted" style="caption-side:top;text-align:left;font-size:11px;padding-bottom:4px">Instability ↓ · d10 →</caption>${head}${rows}</table>`;
+    return `<table class="ctable"><caption class="muted" style="caption-side:top;text-align:left;font-size:11px;padding-bottom:4px">Rows: Instability band · Columns: d10 roll</caption>${head}${rows}</table>${K.crisisLegend()}`;
   }
 
   function trayDice(cur, team, res, a) {
@@ -103,8 +103,9 @@
         sum = `<div class="sum"><span>Dice ${tr.diceSum}</span>${ct.violent ? `<span>+ Deterrence ${tr.detBonus}</span>${tr.assuranceBonus ? `<span>+ Assurance ${tr.assuranceBonus}</span>` : ""}` : ""}<span class="total">${tr.total}</span></div>
           <div class="pointsline">${res.points[team].map((p) => `<span class="chip ${p.pts > 0 ? "goodc" : "badc"}">${p.pts > 0 ? "+" : ""}${p.pts} · ${esc(p.reason)}</span>`).join("")}</div>`;
       } else {
-        const ev = R.expectedDice(cur.pools[team]) + (ct.violent ? cur.pools[team].deterrence : 0);
-        sum = `<div class="sum"><span class="muted">Expected ≈ ${ev.toFixed(1)}${ct.violent ? ` (incl. deterrence ${cur.pools[team].deterrence})` : ""}</span></div>`;
+        const asr = ct.violent ? R.assuranceInstability(s.teams[team].zones[z].assurance) : 0;
+        const ev = R.expectedDice(cur.pools[team]) + (ct.violent ? cur.pools[team].deterrence + asr : 0);
+        sum = `<div class="sum"><span class="muted">Expected ≈ ${ev.toFixed(1)}${ct.violent ? ` (incl. deterrence ${cur.pools[team].deterrence}${asr ? ` and Assurance +${asr}` : ""})` : ""}</span></div>`;
       }
       return `<div class="tray ${K.teamCls(team)} ${win ? "win" : ""}"><h3>${K.teamChip(team)} ${win ? '<span class="chip goodc">VICTOR</span>' : ""}</h3>${trayDice(cur, team, res, a)}${sum}</div>`;
     };
@@ -115,7 +116,7 @@
         : `${TC.TEAM_INFO[cur.intelTeam].name} weighs its Intelligence advantage…`;
     } else if (cur.intelChoice) {
       const ic = cur.intelChoice;
-      notes = `Intelligence: ${TC.TEAM_INFO[cur.intelTeam].name} ${ic.kind}d ${TC.TEAM_INFO[ic.target].name}'s die d${ic.before} → d${ic.after}. `;
+      notes = `Intelligence: ${TC.TEAM_INFO[cur.intelTeam].name} ${ic.kind}d ${ic.target === cur.intelTeam ? "its own" : TC.TEAM_INFO[ic.target].name + "'s"} die d${ic.before} → d${ic.after}. `;
     } else notes = "Intelligence tied: no die is modified. ";
     if (res && a.reveal >= 1 && res.comms) notes += `Communications: ${TC.TEAM_INFO[res.comms.team].name} re-rolls its lowest die (${res.comms.before} → rolled ${res.comms.rolled}, keeps ${res.comms.after}). `;
     if (res && a.reveal >= 2 && res.protection) notes += `Protection: ${TC.TEAM_INFO[res.protection.team].name} forces a re-roll of the enemy's highest die (${res.protection.before} → rolled ${res.protection.rolled}, keeps ${res.protection.after}). `;
@@ -133,30 +134,34 @@
             <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px">${K.die(10, { size: 56, value: cur.roll, cls: "land" })}
               <div><div style="font-family:var(--head);font-size:30px;line-height:1">Instability ${inst.total}</div>
               <div class="muted" style="font-size:12.5px">Deterrence ${inst.d4} vs ${inst.d10} → gap ${inst.base}${inst.assurance ? ` · +${inst.assurance} from Assurance 6–7` : ""}${inst.reduced ? ` · −${inst.reduced} Influence spent` : ""}</div>
-              <div class="muted" style="font-size:12.5px">d10 roll ${cur.roll} on row ${Math.min(inst.total, 6)}${inst.total >= 6 ? "+" : ""}</div></div></div>
+              <div class="muted" style="font-size:12.5px">d10 roll ${cur.roll} on the Instability ${TC.crisisRowLabel(R.crisisRow(inst.total))} row</div></div></div>
             ${crisisTable(cur, true)}</div>
           <div><div class="banner ${ct.violent ? "warn" : "info"}" style="margin-top:0"><b>${ct.name}</b>: winner +${ct.victor}; zone bonus +${ct.bonus} if Fourth Army wins C or Tenth Army wins A; army with higher deterrence <b>${ct.deterrence > 0 ? "+" : ""}${ct.deterrence}</b>.${ct.violent ? " Each army adds its Deterrence to its roll (+1/+2 at Assurance 6/7)." : ""}</div>
             <div class="advbar">${adv("intel", "Intelligence", "Promote 1 own die or demote 1 enemy die before rolling")}${adv("comms", "Communications", "Re-roll own lowest die, keep higher")}${adv("protection", "Protection", "Enemy re-rolls its highest die, keeps lower")}</div>
             <div class="notes">${notes}</div></div></div>
         <div class="trays">${tray("fourth")}${tray("tenth")}</div>
+        <div class="taglegend"><span><b>I</b> changed by Intelligence</span><span><b>C</b> Communications re-roll</span><span><b>P</b> Protection re-roll</span><span><b class="m">+1</b> Stockage modifier on the die</span></div>
       </div><div class="modal-foot">${foot}</div></div>`;
   };
 
   async function roll() {
     const a = anim();
+    const s = App.state;
     a.rolling = true;
     a.reveal = 0;
     App.render();
     await K.sleep(1100);
     a.rolling = false;
-    E.resolveZone(App.state);
+    if (App.state !== s) return;
+    E.resolveZone(s);
     App.save();
     App.render();
-    const cur = App.state.crisis.current;
+    const cur = s.crisis.current;
     const res = cur.result;
     for (let step = 1; step <= 3; step++) {
       const need = (step === 1 && res.comms) || (step === 2 && res.protection) || step === 3;
       if (need) await K.sleep(900 * Math.max(0.6, App.speed()));
+      if (App.state !== s) return;
       a.reveal = step;
       App.render();
     }
@@ -211,7 +216,7 @@
       autoBusy = true;
       await K.sleep(500 * App.speed());
       autoBusy = false;
-      roll();
+      if (App.state === s) roll();
     } else if (cur.stage === "done" && !humans.length && anim().reveal >= 3) {
       autoBusy = true;
       await K.sleep(1600 * App.speed());

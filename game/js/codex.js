@@ -43,7 +43,7 @@
     overview: () => `<h2>TheaterComplex</h2>
       <p>A two-sided competitive wargame from the U.S. Army War College. Each side is the commander and staff of a fictional Theater Army: <b class="c4">Fourth Army</b> (black markers) or <b class="c10">Tenth Army</b> (white markers). Over several years (turns) they campaign across three zones to build deterrence, partner capacity, infrastructure and readiness, while keeping the theater from escalating.</p>
       <h3>How to win</h3><ul>
-        <li>Outperform the opponent in each zone's <b>Crisis Assessment</b> (1–7 points per zone per turn).</li>
+        <li>Outperform the opponent in each zone's <b>Crisis Assessment</b> (1–8 points per zone per turn, counting the objective-zone bonus).</li>
         <li>Hold higher <b>deterrence</b> when crises stay peaceful (+1), but beware: in violent crises the higher-deterrence army <b>loses 3</b>.</li>
         <li>Hold more theater-wide <b>Influence</b> (+1 per turn).</li>
         <li>Never <b>over-task</b> an MSC (−1 each per turn).</li></ul>

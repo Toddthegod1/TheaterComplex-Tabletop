@@ -78,6 +78,9 @@ test("crisis table matches the adjudicator sheet", () => {
   [2, 3, 4].forEach((i) => assert.strictEqual(col(i), mid));
   [5, 6, 9].forEach((i) => assert.strictEqual(col(i), high));
 });
+test("instability bands follow the crisis table rows", () => {
+  assert.deepStrictEqual([0, 1, 2, 4, 5, 9].map(R.instabilityBand), [0, 0, 1, 1, 2, 2]);
+});
 test("capability check: types, points, combat units", () => {
   const s = E.newGame({ seed: 3 });
   const sust = Object.keys(s.cards).filter((id) => R.cap(id).code === "SUST" && R.cap(id).team === "fourth");

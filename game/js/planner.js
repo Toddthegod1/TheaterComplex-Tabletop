@@ -156,8 +156,8 @@
               return `<option value="${id}" ${sl.id === id ? "selected" : ""}>${esc(R.cmd(id).short)} — ${n} task${n === 1 ? "" : "s"}${n >= TC.MSC_FREE_SLOTS ? " ⚠ over-tasked" : ""}</option>`;
             });
             const n = sl.id ? (load[sl.id] || 0) + 1 : 0;
-            return `<span class="cmdslot" data-art="${sl.id ? R.cmd(sl.id).art : ""}"><b>${sl.code === "ANY" ? "Any MSC" : sl.code}</b>
-              <select data-change="pl-cmd" data-i="${i}">${sl.id ? "" : "<option>—</option>"}${opts.join("")}</select>${n > TC.MSC_FREE_SLOTS ? `<span class="chip badc" title="Task #${n} for this MSC: needs d6 > ${n} and costs −1 point">task #${n}: roll ${n + 1}+</span>` : ""}</span>`;
+            return `<span class="cmdslot" ${sl.id ? `data-art="${R.cmd(sl.id).art}"` : ""}><b>${sl.code === "ANY" ? "Any MSC" : sl.code}</b>
+              <select data-change="pl-cmd" data-i="${i}">${sl.id ? "" : '<option value="">—</option>'}${opts.join("")}</select>${n > TC.MSC_FREE_SLOTS ? `<span class="chip badc" title="Task #${n} for this MSC: needs d6 > ${n} and costs −1 point">task #${n}: roll ${n + 1}+</span>` : ""}</span>`;
           })
           .join("")
       : '<span class="muted">No command needed.</span>';
@@ -202,7 +202,7 @@
     const issues = ev.issues.length ? `<ul class="issues">${ev.issues.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : '<div class="good">✔ Ready to add to your campaign.</div>';
 
     return `<div class="modal wide" id="planner"><div class="modal-head"><span class="chip" style="background:var(--task);border:0;color:#fff;font-size:15px">${task.num}</span><h2>${esc(task.name)}</h2><span class="muted">${esc(task.fn)}</span>
-        ${task.blocked ? '<span class="chip warnc" title="Not allowed at Assurance 6–7">T×T</span>' : ""}<button class="btn ghost x" data-act="close-modal">✕</button></div>
+        ${task.blocked ? '<span class="chip warnc" title="Agreements and security cooperation (the T×T icon on the card) are not allowed in a zone at Assurance 6–7">Blocked at Assurance 6–7</span>' : ""}<button class="btn ghost x" data-act="close-modal">✕</button></div>
       <div class="modal-body"><div class="planner">
         <div class="art"><div class="pair"><img src="${task.art[me].front}" data-art="${task.art[me].front}" alt="front"><img src="${task.art[me].back}" data-art="${task.art[me].back}" alt="effects"></div>
           <div class="req"><h4>Effects on success</h4><div class="effects-line">${eff.join(" ") || '<span class="muted">—</span>'}</div>
@@ -250,7 +250,7 @@
     const s = App.state;
     const ev = E.evaluateTask(s, App.me(), plannerSpec(m), m.uid || undefined);
     const slots = commandSlots(ev.req, ev.commands);
-    slots[Number(el.dataset.i)].id = el.value;
+    slots[Number(el.dataset.i)].id = el.value || null;
     m.commands = slots.map((sl) => sl.id).filter(Boolean);
     rerender();
   };
@@ -277,7 +277,7 @@
     const ev = E.evaluateTask(s, me, plannerSpec(m), m.uid || undefined);
     const spec = { num: m.num, zone: m.zone, branch: m.branch, options: m.options, commands: ev.commands, caps: ev.caps };
     const r = m.uid ? E.replanTask(s, me, m.uid, spec) : E.planTask(s, me, spec);
-    if (!r.ok) return alert((r.issues || [r.error]).join("\n"));
+    if (!r.ok) return App.notify(r.issues || [r.error], "Can't plan this task");
     App.ui.modal = null;
     App.save();
     App.render();
@@ -289,6 +289,11 @@
     App.save();
     App.render();
   };
+
+  // ================================================================ confirm dialog
+  M.confirm = (m) => `<div class="modal narrow" id="confirm"><div class="modal-head"><h2>${esc(m.title)}</h2><button class="btn ghost x" data-act="close-modal">✕</button></div>
+      <div class="modal-body"><p style="margin:0">${esc(m.body)}</p></div>
+      <div class="modal-foot"><button class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary" data-act="${m.act}">${esc(m.yes || "OK")}</button></div></div>`;
 
   // ================================================================ ASOS allocation
   M.asos = function (m) {
@@ -323,18 +328,20 @@
   A["as-confirm"] = () => {
     const m = modal();
     const r = E.allocateAsos(App.state, m.team, m.id, m.sel);
-    if (!r.ok) return alert(r.error);
+    if (!r.ok) return App.notify(r.error);
     App.ui.modal = null;
     App.save();
     App.render();
+    App.flow();
   };
   A["as-unmet"] = () => {
     const m = modal();
     const r = E.declareAsosUnmet(App.state, m.team, m.id);
-    if (!r.ok) return alert(r.error);
+    if (!r.ok) return App.notify(r.error);
     App.ui.modal = null;
     App.save();
     App.render();
+    App.flow();
   };
 
   // ================================================================ force management

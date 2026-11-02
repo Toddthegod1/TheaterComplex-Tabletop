@@ -198,6 +198,7 @@
       { min: 5, max: null, sq: 1, sof: 3, lim: 7 },
     ],
   };
+  TC.CRISIS_BANDS = ["calm", "tense", "volatile"];
   TC.crisisRowLabel = (row) => (row.max == null ? `${row.min}+` : row.max === row.min ? `${row.min}` : `${row.min}–${row.max}`);
 
   TC.CRISIS_TYPES = {

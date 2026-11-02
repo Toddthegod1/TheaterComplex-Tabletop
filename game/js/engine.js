@@ -5,14 +5,15 @@
   const R = TC.rules;
   const E = (TC.engine = {});
 
+  // Cleanup is instant (it runs when Force Tailoring is confirmed), so the
+  // phase bar shows it as part of tailoring.
   E.PHASES = [
-    { key: "taskLimit", label: "Task Limit" },
-    { key: "asos", label: "ASOS" },
-    { key: "planning", label: "Planning" },
-    { key: "implementation", label: "Implementation" },
-    { key: "crisis", label: "Crisis Assessment" },
-    { key: "tailoring", label: "Force Tailoring" },
-    { key: "cleanup", label: "Cleanup" },
+    { key: "taskLimit", label: "Task Limit", short: "Limit" },
+    { key: "asos", label: "ASOS", short: "ASOS" },
+    { key: "planning", label: "Planning", short: "Plan" },
+    { key: "implementation", label: "Implementation", short: "Execute" },
+    { key: "crisis", label: "Crisis Assessment", short: "Crisis" },
+    { key: "tailoring", label: "Tailoring & Cleanup", short: "Tailor" },
   ];
 
   const emptyPlan = () => ({ tasks: [], rffNew: [], rffReturn: [], transfers: [], rsoi: [], asosCover: [], ready: false });
