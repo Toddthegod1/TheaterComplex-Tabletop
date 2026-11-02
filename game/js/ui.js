@@ -202,7 +202,6 @@
             ${tog("capsMustBeInTaskZone", "Capabilities must be in the task's zone", "Tasks are executed near a zone; their capability cards come from that zone's mat. Turn off to let tasks draw on any zone, as ASOS does.")}
             ${tog("commandsCountTowardRff", "Requested MSCs count toward the 10-force RFF cap", "The rulebook caps 'additional capabilities' at 10 and is silent on command cards.")}
           </div>
-          <div class="banner warn"><b>Crisis Assessment table is provisional.</b> The rulebook refers to it but it does not exist in any source file. A placeholder escalation table is used; see the Codex → Crisis Assessment.</div>
         </div>
       </div>
       <div class="btn-row" style="margin-top:8px"><button class="btn ghost" data-act="title">← Back</button><span style="flex:1"></span><button class="btn primary lg" data-act="start">Begin Campaign</button></div>
@@ -352,7 +351,7 @@
             <div class="lbl">Instability</div><div class="v ${inst.total >= 4 ? "bad" : inst.total >= 2 ? "" : "good"}${fx(`inst.${zone}`, true).cls}"${fx(`inst.${zone}`, true).style}>${inst.total}${fx(`inst.${zone}`, true).html}</div></div>
           <div class="det right"><div style="text-align:right"><div class="num c10${fx(`tenth.det.${zone}`).cls}"${fx(`tenth.det.${zone}`).style}>${inst.d10}${fx(`tenth.det.${zone}`).html}</div><div class="lbl">Deterrence</div></div>${K.die(p10.theater[0].sides, { size: 30, title: "Tenth Army Deterrence die" })}</div>
         </div>
-        <div title="Chance of each crisis type at this Instability (provisional table)">
+        <div title="Chance of each crisis type at this Instability ">
           <div class="oddsbar">${["SQ", "SOF", "LIM", "LSCO"].map((k) => `<i class="${k}" style="width:${odds[k]}%"></i>`).join("")}</div>
           <div class="oddslegend"><span>Status quo ${odds.SQ}%</span><span>Show of force ${odds.SOF}%</span><span>Ltd op ${odds.LIM}%</span><span>LSCO ${odds.LSCO}%</span></div>
         </div>

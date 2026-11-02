@@ -185,26 +185,20 @@
   TC.taskByNum = (n) => TC.TASKS[n - 1];
 
   // ----------------------------------------------------------------------
-  // CRISIS ASSESSMENT TABLE — PROVISIONAL.
-  // The rulebook (6.F.1) refers to this table but it is not in the rulebook,
-  // its figures, the workbook, or the card art. This table is a placeholder
-  // for designer review: higher Instability shifts the same d10 roll toward
-  // more severe crises. Edit the ranges below; everything else adapts.
-  // Each row: Instability value -> [max d10 for Status Quo, Show of Force,
-  // Limited Operation]; anything above the last is LSCO.
+  // CRISIS ASSESSMENT TABLE ("Determine Escalation"), from the adjudicator
+  // sheet (docs/img/crisis-assessment-sheet.png).
+  // Each row covers an Instability band (min..max; the last row has no max)
+  // and gives the highest d10 result for Status Quo, Show of Force and
+  // Limited Operation. Anything above `lim` is LSCO.
   // ----------------------------------------------------------------------
   TC.CRISIS_TABLE = {
-    provisional: true,
     rows: [
-      { instability: 0, sq: 6, sof: 9, lim: 10 },
-      { instability: 1, sq: 5, sof: 8, lim: 10 },
-      { instability: 2, sq: 4, sof: 7, lim: 9 },
-      { instability: 3, sq: 3, sof: 6, lim: 9 },
-      { instability: 4, sq: 2, sof: 5, lim: 8 },
-      { instability: 5, sq: 1, sof: 4, lim: 7 },
-      { instability: 6, sq: 0, sof: 2, lim: 6 }, // 6 or more
+      { min: 0, max: 1, sq: 7, sof: 9, lim: 10 },
+      { min: 2, max: 4, sq: 3, sof: 6, lim: 9 },
+      { min: 5, max: null, sq: 1, sof: 3, lim: 7 },
     ],
   };
+  TC.crisisRowLabel = (row) => (row.max == null ? `${row.min}+` : row.max === row.min ? `${row.min}` : `${row.min}–${row.max}`);
 
   TC.CRISIS_TYPES = {
     SQ: { key: "SQ", name: "Status Quo", victor: 1, bonus: 1, deterrence: 1, violent: false },

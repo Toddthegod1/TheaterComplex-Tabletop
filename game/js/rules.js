@@ -77,7 +77,8 @@
 
   R.crisisRow = function (instability) {
     const rows = TC.CRISIS_TABLE.rows;
-    return rows[R.clamp(instability, 0, rows.length - 1)];
+    const v = Math.max(0, instability);
+    return rows.find((r) => v >= r.min && (r.max == null || v <= r.max)) || rows[rows.length - 1];
   };
   R.crisisTypeFor = function (instability, d10) {
     const row = R.crisisRow(instability);

@@ -93,16 +93,15 @@
 
     crisis: () => {
       const rows = TC.CRISIS_TABLE.rows
-        .map((r, i) => {
+        .map((r) => {
           const cells = Array.from({ length: 10 }, (_, d) => {
-            const t = R.crisisTypeFor(r.instability, d + 1);
+            const t = R.crisisTypeFor(r.min, d + 1);
             return `<td class="ct-${t}" style="color:#fff">${t}</td>`;
           }).join("");
-          return `<tr><th>${r.instability}${i === TC.CRISIS_TABLE.rows.length - 1 ? "+" : ""}</th>${cells}</tr>`;
+          return `<tr><th>${TC.crisisRowLabel(r)}</th>${cells}</tr>`;
         })
         .join("");
       return `<h2>Crisis Assessment</h2>
-        <div class="banner warn"><b>Provisional table.</b> Rulebook §6.F.1 says to "consult the Crisis Assessment table", but that table is not in the rulebook text, any of its 13 figures, the card database, or the card art. The game uses the placeholder below, where higher Instability shifts the same d10 toward violent crises. Edit <code>TC.CRISIS_TABLE</code> in <code>game/js/data.js</code> once the designer supplies the real one.</div>
         <h3>1. Instability</h3><p>Instability = |Fourth Army deterrence − Tenth Army deterrence| + Assurance instability (+1 for each army at 6, +2 for each at 7) − Influence spent this turn (3 Influence per −1).</p>
         <h3>2. Crisis type (d10)</h3><table class="t"><tr><th>Instability</th>${Array.from({ length: 10 }, (_, i) => `<th>${i + 1}</th>`).join("")}</tr>${rows}</table>
         <h3>3. Dice resolution</h3><ol><li><b>Intelligence advantage</b>: promote 1 friendly die or demote 1 enemy die.</li><li>Roll the Theater Army dice (deterrence die + infrastructure d6s) and apply the stockage modifier to each.</li><li>Roll the partner dice (partner capability die + interoperability d4s).</li>
@@ -168,7 +167,7 @@
         <li>Deterrence 11 and 12 rows ("+1/+2 Instability instead of a bigger die") are <b>not</b> on the card art or in the workbook. The printed track is 4–10. Its "Additional Instability" boxes hold the extra Assurance-driven instability cubes.</li>
         <li>The addendum omits Stockage, whose breakpoints also differ by zone (Zone A has no 0 band; Zone C's +1 starts at 6).</li></ul>
       <h3>Conflicts and gaps, with the rule this game applies</h3><ul>
-        <li><b>Crisis Assessment table</b>: missing from every source. A provisional table is used (see Crisis Assessment).</li>
+        <li><b>Crisis Assessment table</b>: missing from the rulebook; taken from the adjudicator's Crisis Assessment sheet. Where the sheet's VP summary is shorter than the rulebook (it lists the +1 deterrence factor only under Status Quo), the rulebook's points table is used: Show of Force also gives +1 to the army with higher deterrence.</li>
         <li><b>Deterrence below 4</b>: Enclosure 2 starts two zones at 3, below the printed track. Uses a d4.</li>
         <li><b>Information Operations</b>: rulebook says opponent −1 Influence; card back shows "+1/−1"; workbook note says −2. Uses −1 (card and rulebook agree).</li>
         <li><b>MSC bandwidth</b>: rulebook says "three spaces"; the card art shows 2 white slots plus 3 red over-tasked slots, and §7 says the roll is needed for the 3rd and later tasks. Uses 2 free slots, at most 5 tasks, roll d6 &gt; number of tasks so far.</li>

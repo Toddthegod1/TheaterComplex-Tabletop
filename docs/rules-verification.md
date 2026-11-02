@@ -57,28 +57,17 @@ The values below match in all three sources (workbook, card art, rulebook figure
 2. **Stockage is missing.** It is the fifth dice-related tracker and it also varies by zone. Zone A has no 0 band, and Zone C only reaches +1 at 6.
 3. **"Infrastructure Capacity, Zone A" table** is correct (1–4 ×1, 5–6 ×2, 7 ×3). In the addendum the "7" row sits on the next page, which makes it easy to miss.
 
-## 3. Crisis Assessment table: not found
+## 3. Crisis Assessment table: from the adjudicator sheet
 
-Rulebook §6.F.1 says to "consult the Crisis Assessment table and select the row matching that Instability value… roll 1d10 and use the corresponding column." That table is not in:
-
-- the rulebook text or any of its 13 figures;
-- any of the 6 workbook sheets;
-- any card, mat, tracker or SVG asset;
-- the other copies of the rulebook and workbook in `Downloads/OneDrive_1_10-7-2026` and `OneDrive_1_10-18-2026_extracted`. Those copies are byte-identical (same MD5) to the ones in this repo.
-
-The digital edition uses a **provisional** table in `game/js/data.js` (`TC.CRISIS_TABLE`), labelled as provisional everywhere it appears in the game. Changing that one object updates the game, the odds bars and the Codex together.
+Rulebook §6.F.1 says to "consult the Crisis Assessment table", but the table is not in the rulebook, its figures, the workbook or the card art. It is on the separate adjudicator's Crisis Assessment sheet, saved here as [img/crisis-assessment-sheet.png](img/crisis-assessment-sheet.png). The game uses it in `game/js/data.js` (`TC.CRISIS_TABLE`):
 
 | Instability | Status Quo | Show of Force | Limited Op | LSCO |
 |---|---|---|---|---|
-| 0 | 1–6 | 7–9 | 10 | — |
-| 1 | 1–5 | 6–8 | 9–10 | — |
-| 2 | 1–4 | 5–7 | 8–9 | 10 |
-| 3 | 1–3 | 4–6 | 7–9 | 10 |
-| 4 | 1–2 | 3–5 | 6–8 | 9–10 |
-| 5 | 1 | 2–4 | 5–7 | 8–10 |
-| 6+ | — | 1–2 | 3–6 | 7–10 |
+| 0–1 | 1–7 | 8–9 | 10 | — |
+| 2–4 | 1–3 | 4–6 | 7–9 | 10 |
+| 5+ | 1 | 2–3 | 4–7 | 8–10 |
 
-**Action for the designer:** supply the real table, or approve this one.
+The rest of the sheet (dice, modifiers, Limited Op/LSCO deterrence and assurance bonuses, zone bonuses, theater-wide points) matches the rulebook and the game. One difference: the sheet's VP summary lists "+1 VP higher deterrence" only under Status Quo, while the rulebook's points table also gives it for Show of Force. The game follows the rulebook.
 
 ## 4. Other discrepancies, and how the digital edition resolves them
 

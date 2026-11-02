@@ -69,6 +69,15 @@ test("crisis table rows cover the full d10", () => {
     assert.strictEqual(odds.SQ + odds.SOF + odds.LIM + odds.LSCO, 100);
   }
 });
+test("crisis table matches the adjudicator sheet", () => {
+  const col = (inst) => Array.from({ length: 10 }, (_, i) => R.crisisTypeFor(inst, i + 1)).join(" ");
+  const low = "SQ SQ SQ SQ SQ SQ SQ SOF SOF LIM";
+  const mid = "SQ SQ SQ SOF SOF SOF LIM LIM LIM LSCO";
+  const high = "SQ SOF SOF LIM LIM LIM LIM LSCO LSCO LSCO";
+  [0, 1].forEach((i) => assert.strictEqual(col(i), low));
+  [2, 3, 4].forEach((i) => assert.strictEqual(col(i), mid));
+  [5, 6, 9].forEach((i) => assert.strictEqual(col(i), high));
+});
 test("capability check: types, points, combat units", () => {
   const s = E.newGame({ seed: 3 });
   const sust = Object.keys(s.cards).filter((id) => R.cap(id).code === "SUST" && R.cap(id).team === "fourth");

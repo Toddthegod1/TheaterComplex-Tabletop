@@ -49,4 +49,4 @@ docs/rules-verification.md  source cross-check, discrepancies, open design quest
 
 ## Open design questions
 
-See [docs/rules-verification.md](docs/rules-verification.md). The main one is that the rulebook's **Crisis Assessment table doesn't exist in any source file**. The game uses a clearly labelled provisional table until the designer supplies the real one.
+See [docs/rules-verification.md](docs/rules-verification.md). The Crisis Assessment table isn't in the rulebook; the game uses the one from the adjudicator's sheet ([docs/img/crisis-assessment-sheet.png](docs/img/crisis-assessment-sheet.png)).

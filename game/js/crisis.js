@@ -14,18 +14,18 @@
   function crisisTable(cur, showHit) {
     const head = `<tr><th></th>${Array.from({ length: 10 }, (_, i) => `<th>${i + 1}</th>`).join("")}</tr>`;
     const rows = TC.CRISIS_TABLE.rows
-      .map((row, ri) => {
+      .map((row) => {
         const isRow = R.crisisRow(cur.instability.total) === row;
         const cells = Array.from({ length: 10 }, (_, i) => {
-          const type = R.crisisTypeFor(row.instability, i + 1);
+          const type = R.crisisTypeFor(row.min, i + 1);
           const hit = isRow && showHit && cur.roll === i + 1;
           return `<td class="ct-${type} ${hit ? "hit" : ""}" title="${TC.CRISIS_TYPES[type].name}">${type === "LSCO" ? "LSCO" : type}</td>`;
         }).join("");
-        const label = ri === TC.CRISIS_TABLE.rows.length - 1 ? `${row.instability}+` : row.instability;
+        const label = TC.crisisRowLabel(row);
         return `<tr class="${isRow ? "row" : ""}"><td class="rl">${label}</td>${cells}</tr>`;
       })
       .join("");
-    return `<table class="ctable"><caption class="muted" style="caption-side:top;text-align:left;font-size:11px;padding-bottom:4px">Instability ↓ · d10 →${TC.CRISIS_TABLE.provisional ? ' <span class="chip warnc" style="padding:0 6px">provisional table</span>' : ""}</caption>${head}${rows}</table>`;
+    return `<table class="ctable"><caption class="muted" style="caption-side:top;text-align:left;font-size:11px;padding-bottom:4px">Instability ↓ · d10 →</caption>${head}${rows}</table>`;
   }
 
   function trayDice(cur, team, res, a) {
