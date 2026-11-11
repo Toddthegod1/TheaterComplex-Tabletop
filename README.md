@@ -14,7 +14,8 @@ Both run straight from the file system: double-click the HTML file. There's no b
 ## Playing the digital edition
 
 - **Tutorial**: one guided turn as Fourth Army against the AI. A coach points at each part of the screen and waits for you to act.
-- **New campaign**: play Fourth or Tenth Army against the AI, play two people on one screen (planning is hidden behind a hand-off screen), or watch AI vs AI.
+- **New campaign**: play Fourth or Tenth Army against the AI, play two people on one screen (planning is hidden behind a hand-off screen), or watch AI vs AI. The AI opponent comes in three styles: **Recruit** (plans fewer tasks; best for a first game), **Regular**, and **Aggressive** (plays Disruption against you).
+- **Help while you play**: a "Your move" line in the side panel always says what to click next. During planning, ★ marks suggested task cards with their best zone, and **Suggest a plan** fills empty task slots for you. The end-of-year panel shows where each army's points came from, with tips for next year.
 - **Rules Codex**: the rulebook reorganized for play. It includes the die legend, the crisis table, all 21 task cards, the order of battle, and every rules clarification.
 
 The game automates the adjudicator. It handles the task-limit and ASOS draws, checks staff, MSC and capability requirements, over-tasking rolls, initiative, Disruption, Influence spending, all of Crisis Assessment (Intelligence, Communications and Protection advantages, scoring), force tailoring with RFF, RSOI and SecWar, and even-turn decay.

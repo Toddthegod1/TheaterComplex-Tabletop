@@ -8,12 +8,12 @@
   // Cleanup is instant (it runs when Force Tailoring is confirmed), so the
   // phase bar shows it as part of tailoring.
   E.PHASES = [
-    { key: "taskLimit", label: "Task Limit", short: "Limit" },
-    { key: "asos", label: "ASOS", short: "ASOS" },
-    { key: "planning", label: "Planning", short: "Plan" },
-    { key: "implementation", label: "Implementation", short: "Execute" },
-    { key: "crisis", label: "Crisis Assessment", short: "Crisis" },
-    { key: "tailoring", label: "Tailoring & Cleanup", short: "Tailor" },
+    { key: "taskLimit", label: "Task Limit", short: "Limit", tip: "a d6 sets how many tasks each army may plan this year" },
+    { key: "asos", label: "ASOS", short: "ASOS", tip: "Army Support to Other Services: lend cards to the Air Force, Navy and Marines" },
+    { key: "planning", label: "Planning", short: "Plan", tip: "choose task cards and request forces, in secret" },
+    { key: "implementation", label: "Implementation", short: "Execute", tip: "armies take turns executing their tasks" },
+    { key: "crisis", label: "Crisis Assessment", short: "Crisis", tip: "a crisis hits each zone; both armies roll dice and score points" },
+    { key: "tailoring", label: "Tailoring & Cleanup", short: "Tailor", tip: "forces arrive and leave; the next year begins" },
   ];
 
   const emptyPlan = () => ({ tasks: [], rffNew: [], rffReturn: [], transfers: [], rsoi: [], asosCover: [], ready: false });

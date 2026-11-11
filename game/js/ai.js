@@ -8,6 +8,18 @@
 
   const expectedDie = (sides) => (sides + 1) / 2;
 
+  // Opponent styles. noise: random spread added to each option's value.
+  // taskCut: plan this many fewer tasks than the limit. disrupt: play a task
+  // as Disruption when it hurts the enemy clearly more than it helps itself.
+  // (Simulation: Aggressive and Regular are about even; Recruit loses ~3:1.)
+  AI.LEVELS = {
+    easy: { label: "Recruit", noise: 1.6, taskCut: 2 },
+    normal: { label: "Regular", noise: 0.3, taskCut: 0 },
+    hard: { label: "Aggressive", noise: 0.3, taskCut: 0, disrupt: true },
+  };
+  // settings.aiLevelByTeam (optional) gives each army its own level; tests use it.
+  AI.level = (state, team) => AI.LEVELS[(state.settings.aiLevelByTeam || {})[team] || state.settings.aiLevel] || AI.LEVELS.normal;
+
   // How much a set of tracker changes is worth to `team` in `zone`.
   AI.effectValue = function (state, team, zone, effects) {
     const me = state.teams[team];
@@ -17,12 +29,15 @@
     let v = 0;
     Object.entries(effects).forEach(([key, d]) => {
       if (!d) return;
-      if (key === "influence") v += d * (me.influence < TC.INFLUENCE_MAX ? 1.3 : 0.1) + (me.influence + d > opp.influence && me.influence <= opp.influence ? 1 : 0);
+      if (key === "influence") {
+        v += d * (me.influence < TC.INFLUENCE_MAX ? 1.3 : 0.1) + (me.influence + d > opp.influence && me.influence <= opp.influence ? 1 : 0);
+        if (me.influence > opp.influence && me.influence + d <= opp.influence) v -= 1; // loses the Influence lead
+      }
       else if (key === "access") v += d * (me.access[zone] < 3 ? 0.9 : 0.4);
       else if (key === "assurance") {
         const after = R.clamp(z.assurance + d, 1, 7);
-        if (after >= 6) v -= 2.5;
-        else v += (after - z.assurance) * (z.assurance <= 2 ? 2.2 : 0.9);
+        if (after >= 6 && d > 0) v -= 2.5;
+        else v += (after - z.assurance) * (Math.min(z.assurance, after) <= 2 ? 2.2 : 0.9);
       } else if (key === "partnerCap") {
         const after = R.clamp(z.partnerCap + d, 1, 7);
         v += (expectedDie(R.legend("partnerCap", zone, after)) - expectedDie(R.legend("partnerCap", zone, z.partnerCap))) * 1.5 + (after - z.partnerCap) * 0.4;
@@ -39,7 +54,8 @@
       } else {
         // intel / comms / protection: only the comparison matters.
         const after = R.clamp(z[key] + d, 1, 7);
-        if (z[key] <= oz[key] && after > oz[key]) v += 2.8;
+        if (z[key] > oz[key] && after <= oz[key]) v -= 2.8; // loses the advantage
+        else if (z[key] <= oz[key] && after > oz[key]) v += 2.8;
         else if (after > z[key] && z[key] < oz[key]) v += 0.8;
         else if (after > z[key] && z[key] - oz[key] === 1) v += 0.5;
         else v += 0.15 * (after - z[key]);
@@ -55,29 +71,41 @@
     for (const b of branches) for (const o of opts) yield { branch: b, options: o };
   }
 
-  AI.planTasks = function (state, team) {
+  // Value of one feasible way to play a task (no randomness), or null.
+  function scoreSpec(state, team, task, spec) {
+    const ev = E.evaluateTask(state, team, spec);
+    if (!ev.ok) return null;
+    const load = E.commandLoad(state, team);
+    if (ev.commands.some((id) => (load[id] || 0) >= TC.MSC_FREE_SLOTS)) return null; // avoid over-tasking
+    let value;
+    if (task.special === "rsoi") value = E.gfmCaps(state, team).length ? 2.2 : 0;
+    else {
+      value = AI.effectValue(state, team, spec.zone, ev.req.effects);
+      if (Object.keys(ev.req.oppEffects).length) value += state.teams[TC.other(team)].influence > 0 ? 1.4 : 0;
+    }
+    value -= (task.cost.influence || 0) * 0.9 + (task.cost.access || 0) * 0.35;
+    value -= Math.max(0, ev.capTotal - ev.points) * 0.08 + ev.caps.length * 0.05;
+    return value;
+  }
+
+  // opts.noise: random spread (0 = deterministic, uses no dice).
+  // opts.limit: stop at this many tasks.
+  AI.planTasks = function (state, team, opts = {}) {
     const plan = state.plans[team];
+    const lvl = AI.level(state, team);
+    const noise = opts.noise ?? lvl.noise;
+    const limit = opts.limit ?? Math.max(Math.min(2, state.taskLimit), state.taskLimit - lvl.taskCut);
     let guard = 0;
-    while (plan.tasks.length < state.taskLimit && guard++ < 30) {
+    while (plan.tasks.length < limit && guard++ < 30) {
       let best = null;
       TC.TASKS.forEach((task) => {
         if (plan.tasks.some((t) => t.num === task.num)) return;
         TC.ZONES.forEach((zone) => {
           for (const variant of specVariants(task)) {
             const spec = Object.assign({ num: task.num, zone }, variant);
-            const ev = E.evaluateTask(state, team, spec);
-            if (!ev.ok) continue;
-            const load = E.commandLoad(state, team);
-            if (ev.commands.some((id) => (load[id] || 0) >= TC.MSC_FREE_SLOTS)) continue; // avoid over-tasking
-            let value;
-            if (task.special === "rsoi") value = E.gfmCaps(state, team).length ? 2.2 : 0;
-            else {
-              value = AI.effectValue(state, team, zone, ev.req.effects);
-              if (Object.keys(ev.req.oppEffects).length) value += state.teams[TC.other(team)].influence > 0 ? 1.4 : 0;
-            }
-            value -= (task.cost.influence || 0) * 0.9 + (task.cost.access || 0) * 0.35;
-            value -= Math.max(0, ev.capTotal - ev.points) * 0.08 + ev.caps.length * 0.05;
-            value += R.random(state) * 0.3; // a little personality
+            let value = scoreSpec(state, team, task, spec);
+            if (value === null) continue;
+            if (noise) value += R.random(state) * noise; // a little personality
             if (!best || value > best.value) best = { value, spec };
           }
         });
@@ -86,6 +114,26 @@
       const r = E.planTask(state, team, best.spec);
       if (!r.ok) break;
     }
+  };
+
+  // Planning hints for a human: the best zone and value for each unplanned
+  // task card, keeping only the top `n` worthwhile ones. Read-only.
+  AI.suggestions = function (state, team, n = 3) {
+    const plan = state.plans[team];
+    const out = [];
+    TC.TASKS.forEach((task) => {
+      if (plan.tasks.some((t) => t.num === task.num)) return;
+      let best = null;
+      TC.ZONES.forEach((zone) => {
+        for (const variant of specVariants(task)) {
+          const spec = Object.assign({ num: task.num, zone }, variant);
+          const value = scoreSpec(state, team, task, spec);
+          if (value !== null && (!best || value > best.value)) best = { num: task.num, zone, value };
+        }
+      });
+      if (best && best.value > 0.3) out.push(best);
+    });
+    return out.sort((a, b) => b.value - a.value).slice(0, n);
   };
 
   function supportPointsIn(state, team, zone) {
@@ -174,9 +222,30 @@
     TC.ZONES.forEach((zone) => {
       if (me.influence >= 5 && R.instability(state, zone) >= 4 && R.deterrence(state, team, zone) > R.deterrence(state, opp, zone)) E.spendInfluence(state, team, zone);
     });
-    const next = E.remainingTasks(state, team)[0];
-    if (!next) return null;
-    return E.executeTask(state, team, next.uid, { disrupt: false });
+    const remaining = E.remainingTasks(state, team);
+    if (!remaining.length) return null;
+    if (AI.level(state, team).disrupt) {
+      const pick = AI.bestDisruption(state, team);
+      if (pick) return E.executeTask(state, team, pick.uid, { disrupt: true });
+    }
+    return E.executeTask(state, team, remaining[0].uid, { disrupt: false });
+  };
+
+  // The remaining task that hurts the enemy most when played as Disruption,
+  // compared with playing it normally. Null when no swap is worth it.
+  AI.bestDisruption = function (state, team) {
+    const opp = TC.other(team);
+    let best = null;
+    E.remainingTasks(state, team).forEach((t) => {
+      if (!E.canDisrupt(state, team, t.uid)) return;
+      const req = R.taskRequirement(TC.taskByNum(t.num), t.branch, t.options);
+      const gain = AI.effectValue(state, team, t.zone, req.effects);
+      const neg = Object.fromEntries(Object.entries(req.effects).map(([k, v]) => [k, -v]));
+      const harm = -AI.effectValue(state, opp, t.zone, neg);
+      const edge = harm - gain;
+      if (edge > 1.5 && (!best || edge > best.edge)) best = { uid: t.uid, edge };
+    });
+    return best;
   };
 
   AI.intelChoice = function (state, team) {

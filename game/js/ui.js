@@ -54,8 +54,14 @@
     setTimeout(() => {
       App.ui.toasts = App.ui.toasts.filter((t) => t.id !== id);
       renderToasts();
-    }, ms / Math.max(0.5, App.speed() || 0.5));
+    }, ms * Math.max(1, App.speed() || 1)); // a slower AI pace keeps messages up longer
   };
+
+  // UI state that belongs to one game and must not leak into the next one
+  // (a stale crisis animation could hide the crisis "Next" button).
+  function resetGameUi() {
+    Object.assign(App.ui, { screen: "game", modal: null, overlay: null, curtain: null, busy: false, rolling: false, lastPlanner: null, crisisAnim: null, asosConfirmed: false, toasts: [], flashes: {}, snap: null });
+  }
 
   // In-game replacements for alert() and confirm().
   App.notify = function (text, title = "Not allowed") {
@@ -141,7 +147,10 @@
 
   function renderToasts() {
     const el = document.getElementById("toast-root");
-    el.innerHTML = `<div class="toast-wrap">${App.ui.toasts.map((t) => `<div class="toast ${t.team ? K.teamCls(t.team) : ""}">${t.html}</div>`).join("")}</div>`;
+    // With a full-screen panel open, tuck toasts into the bottom-left corner
+    // so they never cover dice, tables or buttons.
+    const covered = !!(document.getElementById("overlay-root").innerHTML || document.getElementById("modal-root").innerHTML);
+    el.innerHTML = `<div class="toast-wrap ${covered ? "low" : ""}">${App.ui.toasts.map((t) => `<div class="toast ${t.team ? K.teamCls(t.team) : ""}">${t.html}</div>`).join("")}</div>`;
   }
 
   function renderModal() {
@@ -204,6 +213,8 @@
           <div class="field"><label>Campaign length (turns = years)</label>${seg("turns", [[4, "4"], [6, "6"], [8, "8"], [10, "10"]], s.settings.turns)}
             <div class="hint">The tabletop game runs for a set time (typically 4 hours). The turn track goes to 10.</div></div>
           <div class="field"><label>Planning timer</label>${seg("planTimerMinutes", [[0, "Off"], [10, "10 min"], [20, "20 min"], [30, "30 min (rules)"]], s.settings.planTimerMinutes)}</div>
+          ${s.mode !== "hotseat" ? `<div class="field"><label>AI opponent</label>${seg("aiLevel", Object.entries(AI.LEVELS).map(([k, l]) => [k, l.label]), s.settings.aiLevel)}
+            <div class="hint">${{ easy: "Recruit plans fewer tasks and makes loose choices. Best for your first campaign.", normal: "Regular plays a full, sensible campaign.", hard: "Aggressive plays like Regular but turns tasks against you with Disruption." }[s.settings.aiLevel] || ""}</div></div>` : ""}
           <div class="field"><label>AI pace</label>${seg("aiSpeed", [[2, "Deliberate"], [1, "Normal"], [0.4, "Fast"]], s.settings.aiSpeed)}</div>
           <div class="field"><label>Seed (optional)</label><input type="text" data-act="setup-seed" value="${esc(s.seed)}" placeholder="random"><div class="hint">Same seed = same dice and draws, for exercises and after-action review.</div></div>
         </div>
@@ -220,7 +231,7 @@
 
   App.startGame = function (opts) {
     App.state = E.newGame(opts);
-    App.ui = Object.assign(App.ui, { screen: "game", modal: null, overlay: null, toasts: [], busy: false, lastPlanner: null, curtain: null, crisisAnim: null, flashes: {}, snap: null });
+    resetGameUi();
     App.save();
     App.render();
     App.flow();
@@ -236,7 +247,7 @@
   function renderHud(s) {
     const me = App.me();
     const idx = E.phaseIndex(s);
-    const phases = E.PHASES.map((p, i) => `<span class="ph ${i < idx || s.phase === "gameOver" ? "done" : ""} ${i === idx ? "now" : ""}" title="${p.label}"><span class="lf">${p.label}</span><span class="ls">${p.short}</span></span>`).join('<span class="sep">›</span>');
+    const phases = E.PHASES.map((p, i) => `<span class="ph ${i < idx || s.phase === "gameOver" ? "done" : ""} ${i === idx ? "now" : ""}" title="${esc(p.label + " — " + p.tip)}"><span class="lf">${p.label}</span><span class="ls">${p.short}</span></span>`).join('<span class="sep">›</span>');
     const track = Array.from({ length: s.settings.turns }, (_, i) => {
       const n = i + 1;
       return `<span class="${n % 2 === 0 ? "even" : ""} ${n < s.turn ? "past" : ""} ${n === s.turn ? "now" : ""}" title="Turn ${n}${n % 2 === 0 ? " — Assurance & Interoperability degrade" : ""}">${n}</span>`;
@@ -406,6 +417,38 @@
   }
 
   // ---------------------------------------------------------------- advisor & log
+  // One line telling the player exactly what to click next.
+  function yourMove(s, me) {
+    const human = App.isHuman(me);
+    const other = (t) => TC.TEAM_INFO[t].name;
+    switch (s.phase) {
+      case "taskLimit":
+        return App.humans().length ? "Click <b>Roll for task limit</b>." : "";
+      case "asos": {
+        if (!human) return "";
+        const left = s.asos.current.filter((id) => !s.asos.alloc[me][id]).length;
+        return left ? `Click <b>Allocate forces</b> on ${left === 1 ? "the ASOS request" : `each of the ${left} ASOS requests`} in the bottom bar.` : "Click <b>Proceed to planning</b>.";
+      }
+      case "planning": {
+        const plan = s.plans[me];
+        if (!human || plan.ready) return { wait: `Waiting for ${other(TC.other(me))} to finish planning…` };
+        const n = plan.tasks.length;
+        const issues = E.planIssues(s, me).filter((i) => i.startsWith("Select GFM") ? E.asosCoverPossible(s, me) : true);
+        if (issues.length) return `Open <b>Force management</b>: ${esc(issues[0])}`;
+        if (n >= s.taskLimit) return "Your campaign is full. Click <b>Submit plan</b>.";
+        return `Plan task <b>${n + 1} of ${s.taskLimit}</b>: click a card in your hand. Cards marked <b class="gold">★</b> are good picks, or press <b>Suggest a plan</b>.${n ? " Or click <b>Submit plan</b> when you're happy." : ""}`;
+      }
+      case "implementation":
+        if (!s.impl) return "";
+        if (s.impl.done) return "Click <b>Proceed to Crisis Assessment</b>.";
+        return App.isHuman(s.impl.active) ? `Your initiative: click <b>Execute</b> on one task card below.` : { wait: `${other(s.impl.active)} is executing a task…` };
+      case "tailoring":
+        return "Review the year, then click <b>Begin turn</b> to continue.";
+      default:
+        return "";
+    }
+  }
+
   function renderAdvisor(s) {
     const me = App.me();
     const name = TC.TEAM_INFO[me].name;
@@ -417,13 +460,13 @@
         body = `<p>The adjudicator rolls a d6 to set how many task cards each army may plan this turn (minimum 3).</p><p>A limit of 3 also means <b>two</b> ASOS requests instead of one.</p>`;
         break;
       case "asos":
-        title = "Army Support to Other Services";
+        title = "Army Support to Other Services (ASOS)";
         body = `<p>The other Services need Army capabilities. Commit cards of the listed types whose capability points reach the requirement. They come from <b>any</b> zone and are turned sideways for this turn, but still count for deterrence.</p><p>If you truly cannot meet a request, declare it unmet and cover it with GFM forces in your RFF this turn.</p>`;
         break;
       case "planning":
         title = `${name} — campaign planning`;
         body = `<p>Pick up to <b>${s.taskLimit}</b> task cards. Each needs staff to plan it, MSCs to command it and capability points in the zone to execute it.</p>
-          <ul><li>An MSC handling a <b>3rd+</b> task is over-tasked: d6 roll to succeed, and −1 point.</li><li>Use <b>Force Management</b> to request forces (RFF), move units between zones and return last turn's RFF.</li><li>Watch the deterrence gap: it drives Instability.</li></ul>`;
+          <ul><li><b>MSCs</b> (major subordinate commands, the orange cards) command your tasks. An MSC's <b>3rd+</b> task is over-tasked: it needs a d6 roll to succeed, and costs −1 point.</li><li>Use <b>Force Management</b> to request forces from the global pool (an <b>RFF</b>, Request for Forces), move units between zones and send last turn's RFF home.</li><li>Watch the deterrence gap: a big gap raises Instability, which makes violent crises more likely.</li></ul>`;
         break;
       case "implementation":
         title = s.impl && !s.impl.done ? `${TC.TEAM_INFO[s.impl.active].name} holds initiative` : "Implementation complete";
@@ -442,7 +485,8 @@
         body = `<p>The campaign is over. Review the score history and the crisis outcomes.</p>`;
         break;
     }
-    return `<div class="advisor"><div class="who"><div class="avatar">S3</div><div><h4>${esc(title)}</h4><div class="role">Operations officer · advising ${App.humans().length ? esc(name) : "observers"}</div></div></div><div class="msg">${body}</div></div>`;
+    const move = yourMove(s, me);
+    return `<div class="advisor"><div class="who"><div class="avatar">S3</div><div><h4>${esc(title)}</h4><div class="role">Operations officer · advising ${App.humans().length ? esc(name) : "observers"}</div></div></div>${move ? `<div class="yourmove ${move.wait ? "wait" : ""}" id="yourmove"><span class="k">${move.wait ? "⏳ Please wait" : "▶ Your move"}</span>${move.wait || move}</div>` : ""}<div class="msg">${body}</div></div>`;
   }
 
   function renderLog(s) {
@@ -513,12 +557,17 @@
       return `<footer class="dock"><div class="col grow"><h3>Planning</h3><div class="muted">${plan.ready ? "Your plan is submitted. Waiting for the other staff…" : "The AI staff is planning…"}</div></div></footer>`;
     }
     const filter = App.ui.handFilter || "all";
-    const hand = TC.TASKS.map((task) => {
+    const sugg = new Map(plan.tasks.length < s.taskLimit ? AI.suggestions(s, me).map((x, i) => [x.num, Object.assign({ rank: i }, x)]) : []);
+    // Suggested cards first (best first), then the rest in card order.
+    const rank = (t) => (sugg.has(t.num) ? sugg.get(t.num).rank : 99);
+    const hand = TC.TASKS.slice().sort((a, b) => rank(a) - rank(b)).map((task) => {
       const planned = plan.tasks.find((t) => t.num === task.num);
       const zoneOk = TC.ZONES.map((z) => !planned && (task.branches || [{ key: null }]).some((b) => E.evaluateTask(s, me, { num: task.num, zone: z, branch: b.key }).ok));
       const anyOk = zoneOk.some(Boolean);
       const keys = taskEffectKeys(task);
+      const tip = sugg.get(task.num);
       if (filter === "ready" && !anyOk) return "";
+      if (filter === "suggested" && !tip) return "";
       if (filter !== "all" && filter !== "ready" && !keys.includes(filter)) return "";
       const mode = task.mode === "P" ? "Plan-only" : task.mode === "E" ? "Execute-only" : "";
       const dots = planned
@@ -527,13 +576,14 @@
       const cost = Object.entries(task.cost)
         .map(([k, v]) => `<span class="tcost">${k === "influence" ? "◆" : "Acc"}−${v}</span>`)
         .join("");
-      return `<div class="taskcard tc2 ${planned ? "planned" : ""} ${!anyOk && !planned ? "blocked" : ""}" data-act="task-open" data-num="${task.num}" data-art="${task.art[me].front}" title="${esc(task.name)}${mode ? " (" + mode + ")" : ""} — click to plan">
+      const star = tip ? `<span class="sugg" title="${tip.rank === 0 ? "Top suggestion" : "Suggested"}: a strong pick in Zone ${tip.zone} right now">★ ${tip.zone}</span>` : "";
+      return `<div class="taskcard tc2 ${planned ? "planned" : ""} ${!anyOk && !planned ? "blocked" : ""} ${tip ? "suggested" : ""}" data-act="task-open" data-num="${task.num}" ${tip ? `data-z="${tip.zone}"` : ""} data-art="${task.art[me].front}" title="${esc(task.name)}${mode ? " (" + mode + ")" : ""} — click to plan">${star}
         <img src="${task.art[me].front}" alt="" loading="lazy">
         <div class="tinfo"><div class="tname"><b>${task.num}</b> ${esc(task.name)}${task.mode !== "N" ? ` <span class="tmode">${task.mode}</span>` : ""}</div>
           <div class="teff">${effectSummary(task)}</div>
           <div class="tfoot">${dots}${cost}</div></div></div>`;
     }).join("");
-    const filters = [["all", "All"], ["ready", "Plannable now"], ["intel", "Intel"], ["comms", "Comms"], ["protection", "Protection"], ["partnerCap", "Partner Cap"], ["infrastructure", "Infra"], ["interop", "Interop"], ["stockage", "Stockage"], ["assurance", "Assurance"], ["influence", "Influence"], ["access", "Access"]]
+    const filters = [["all", "All"], ["suggested", "★ Suggested"], ["ready", "Plannable now"], ["intel", "Intel"], ["comms", "Comms"], ["protection", "Protection"], ["partnerCap", "Partner Cap"], ["infrastructure", "Infra"], ["interop", "Interop"], ["stockage", "Stockage"], ["assurance", "Assurance"], ["influence", "Influence"], ["access", "Access"]]
       .map(([k, l]) => `<button class="btn sm ${filter === k ? "on" : ""}" data-act="hand-filter" data-k="${k}">${l}</button>`)
       .join("");
     const list = plan.tasks
@@ -550,7 +600,7 @@
         <div class="seg handfilters">${filters}</div>
         <div class="hand" id="hand">${hand || `<div class="muted" style="padding:20px">No task cards match this filter.</div>`}</div></div>
       <div class="col" style="width:290px"><h3>Campaign ${K.teamChip(me)}</h3><div class="col scroll" style="gap:6px;max-height:150px">${list || '<div class="muted">No tasks yet.</div>'}</div>
-        <div class="btn-row" style="margin-top:auto"><button class="btn" data-act="forces" id="btn-forces">Force management <span class="chip">RFF ${rff}/${E.RFF_LIMIT}</span></button>
+        <div class="btn-row" style="margin-top:auto">${plan.tasks.length < s.taskLimit && sugg.size ? '<button class="btn" data-act="suggest-plan" id="btn-suggest" title="Your operations officer fills the empty task slots with sensible picks. You can still edit or remove them.">✨ Suggest a plan</button>' : ""}<button class="btn" data-act="forces" id="btn-forces">Force management <span class="chip">RFF ${rff}/${E.RFF_LIMIT}</span></button>
         <button class="btn primary ${plan.tasks.length ? "pulse" : ""}" data-act="submit" id="btn-submit" title="${esc(issues.join(" "))}">Submit plan</button></div>
         ${issues.length ? `<div class="bad" style="font-size:12px">${esc(issues[0])}</div>` : ""}</div>
       ${commandBoards(s, me)}
@@ -658,6 +708,36 @@
       <button class="btn primary lg" data-act="curtain-ok">I am the ${TC.TEAM_INFO[team].name} commander</button></div>`;
   }
 
+  // Points scored this turn, and a few plain-language lessons for the human.
+  function yearReview(s) {
+    const ev = s.scoreEvents.filter((e) => e.turn === s.turn);
+    const col = (team) => {
+      const mine = ev.filter((e) => e.team === team);
+      const total = mine.reduce((x, e) => x + e.pts, 0);
+      return `<div class="yr ${K.teamCls(team)}"><div class="yrh">${K.teamChip(team)}<span class="yrt ${total > 0 ? "good" : total < 0 ? "bad" : "muted"}">${total > 0 ? "+" : ""}${total} this year</span></div>
+        ${mine.map((e) => `<div class="yrl"><b class="${e.pts > 0 ? "good" : "bad"}">${e.pts > 0 ? "+" : ""}${e.pts}</b> ${esc(e.reason)}</div>`).join("") || '<div class="muted">No points this year.</div>'}</div>`;
+    };
+    const tips = [];
+    const humans = App.humans();
+    if (humans.length === 1 && s.crisis) {
+      const me = humans[0];
+      const opp = TC.other(me);
+      s.crisis.results.forEach((r) => {
+        const ct = TC.CRISIS_TYPES[r.type];
+        if (r.points[me].some((p) => p.pts < 0))
+          tips.push(`<b>Zone ${r.zone}:</b> your deterrence was higher during a ${ct.name}, which cost 3 points. In tense zones, keep your deterrence close to the enemy's instead of far above it.`);
+        else if (r.winner === opp && r.teams[opp].diceSum > r.teams[me].diceSum + 3)
+          tips.push(`<b>Zone ${r.zone}:</b> ${TC.TEAM_INFO[opp].name}'s dice pool was much stronger. Tasks that raise Partner Capability, Infrastructure, Interoperability or Stockage there add dice or bigger dice.`);
+      });
+      const th = s.crisis.theater;
+      if (th && th.influence === opp) tips.push(`${TC.TEAM_INFO[opp].name} had more Influence (◆) and scored +1. Military engagement, SPP contact events and Intelligence support raise yours.`);
+      if (th && th.overtasked[me] && th.overtasked[me].length) tips.push("An over-tasked MSC cost you a point. Spread tasks so no MSC handles more than two.");
+      if (!tips.length && s.crisis.results.some((r) => r.winner === me)) tips.push("Good year. Keep investing in your objective, Zone " + TC.TEAM_INFO[me].objectiveZone + ", where wins score a bonus point.");
+    }
+    return `<h3 class="yrtitle">Year ${s.turn} in review</h3><div class="trays" style="margin-top:0">${col("fourth")}${col("tenth")}</div>
+      ${tips.length ? `<div class="banner tip"><b>💡 Lessons for next year</b><ul>${tips.slice(0, 3).map((t) => `<li>${t}</li>`).join("")}</ul></div>` : ""}`;
+  }
+
   TC.overlays = {
     turnStart() {
       const s = App.state;
@@ -704,7 +784,7 @@
       };
       const even = s.turn % 2 === 0;
       return `<div class="modal" style="width:min(980px,94vw)"><div class="modal-head"><h2>Force Tailoring — Turn ${s.turn}</h2></div>
-        <div class="modal-body"><div class="trays" style="margin-top:0">${col("fourth")}${col("tenth")}</div>
+        <div class="modal-body">${yearReview(s)}<h3 class="yrtitle">Forces on the move</h3><div class="trays" style="margin-top:0">${col("fourth")}${col("tenth")}</div>
         <div class="banner info" style="margin-top:14px">Cleanup: sideways cards return upright, deterrence is recounted${even ? ", and <b>Assurance and Partner Interoperability drop by 1</b> in every zone (even turn)" : ""}.</div></div>
         <div class="modal-foot"><button class="btn primary lg" data-act="cleanup" id="btn-continue">${s.turn >= s.settings.turns ? "Final results" : `Begin turn ${s.turn + 1}`} →</button></div></div>`;
     },
@@ -810,6 +890,7 @@
           if (!humans.length) {
             await pace(600);
             if (App.state !== s) return;
+            App.ui.toasts = [];
             E.beginCrisis(s);
             App.save();
             App.render();
@@ -985,7 +1066,7 @@
       if (!save) return;
       R.indexCards();
       App.state = save;
-      App.ui = Object.assign(App.ui, { screen: "game", modal: null, overlay: null, curtain: null, busy: false, lastPlanner: null });
+      resetGameUi();
       App.render();
       App.flow();
     },
@@ -1022,7 +1103,8 @@
           if (!data.teams || !data.cards) throw new Error("not a TheaterComplex save");
           R.indexCards();
           App.state = data;
-          App.ui = Object.assign(App.ui, { screen: "game", modal: null, overlay: null, curtain: null, busy: false });
+          if (TC.tutorial && TC.tutorial.active) TC.tutorial.stop();
+          resetGameUi();
           App.save();
           App.render();
           App.flow();
@@ -1060,7 +1142,18 @@
       App.render();
     },
     "task-open"(el) {
-      TC.planner.open(Number(el.dataset.num));
+      TC.planner.open(Number(el.dataset.num), el.dataset.z);
+    },
+    "suggest-plan"() {
+      const s = App.state;
+      const me = App.me();
+      const before = new Set(s.plans[me].tasks.map((t) => t.uid));
+      AI.planTasks(s, me, { noise: 0, limit: s.taskLimit });
+      const added = s.plans[me].tasks.filter((t) => !before.has(t.uid));
+      App.save();
+      App.render();
+      if (!added.length) return App.notify("No more tasks fit right now without over-tasking an MSC.", "Nothing to add");
+      App.toast(`<div class="t"><b>${added.length} task${added.length > 1 ? "s" : ""} added</b><br>${added.map((t) => `${esc(TC.taskByNum(t.num).name)} (Zone ${t.zone})`).join("<br>")}<br><span class="muted">Click a task in your campaign list to change or remove it.</span></div>`, me, 6000);
     },
     "task-edit"(el, e) {
       if (e.target.closest('[data-act="task-remove"]')) return;
@@ -1117,6 +1210,7 @@
       App.render();
     },
     "to-crisis"() {
+      App.ui.toasts = [];
       App.do(() => E.beginCrisis(App.state));
     },
     cleanup() {

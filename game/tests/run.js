@@ -127,8 +127,8 @@ function checkInvariants(s, where) {
   Object.entries(s.cards).forEach(([id, c]) => assert.ok(["A", "B", "C", "GFM"].includes(c.zone), `${where}: card ${id} zone ${c.zone}`));
 }
 
-function playGame(seed, turns) {
-  const s = E.newGame({ seed, settings: { turns }, controllers: { fourth: "ai", tenth: "ai" } });
+function playGame(seed, turns, extra = {}) {
+  const s = E.newGame({ seed, settings: Object.assign({ turns }, extra), controllers: { fourth: "ai", tenth: "ai" } });
   let steps = 0;
   while (s.phase !== "gameOver") {
     if (++steps > 5000) throw new Error(`seed ${seed}: stuck in ${s.phase}`);
@@ -192,6 +192,46 @@ test("same seed replays identically", () => {
   assert.deepStrictEqual(a.log, b.log);
 });
 
+// ---------------------------------------------------------------- AI difficulty
+// Each level faces a Regular AI from both sides; a harder AI must win more.
+const levelStats = {};
+["easy", "hard"].forEach((level) => {
+  test(`${level} AI plays complete campaigns`, () => {
+    let wins = 0;
+    let losses = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      TC.TEAMS.forEach((team) => {
+        const s = playGame(1000 + seed, 6, { aiLevelByTeam: { [team]: level, [TC.other(team)]: "normal" } });
+        if (s.winner === team) wins++;
+        else if (s.winner) losses++;
+      });
+    }
+    levelStats[level] = { wins, losses };
+  });
+});
+test("Recruit is easier than Regular", () => {
+  assert.ok(levelStats.easy.wins < levelStats.easy.losses, `Recruit should lose more than it wins vs Regular: ${JSON.stringify(levelStats.easy)}`);
+});
+test("Aggressive AI uses Disruption", () => {
+  const s = playGame(7, 6, { aiLevel: "hard" });
+  assert.ok(s.log.some((l) => /DISRUPTION/.test(l.text)), "no Disruption played in a whole campaign");
+});
+test("suggestions are read-only and point at feasible tasks", () => {
+  const s = E.newGame({ seed: 5 });
+  E.rollTaskLimit(s);
+  TC.TEAMS.forEach((t) => AI.allocateAsos(s, t));
+  E.beginPlanning(s);
+  const rng = s.rng;
+  const sugg = AI.suggestions(s, "fourth");
+  assert.strictEqual(s.rng, rng, "suggestions must not consume dice");
+  assert.ok(sugg.length > 0, "no suggestions on turn 1");
+  sugg.forEach((x) => assert.ok(E.evaluateTask(s, "fourth", { num: x.num, zone: x.zone }).ok || TC.taskByNum(x.num).branches, `task ${x.num} in ${x.zone} not feasible`));
+  AI.planTasks(s, "fourth", { noise: 0, limit: s.taskLimit });
+  assert.strictEqual(s.rng, rng, "a zero-noise plan must not consume dice");
+  assert.ok(s.plans.fourth.tasks.length > 0);
+});
+
+console.log(`AI difficulty vs Regular (wins-losses over 120 games): Recruit ${levelStats.easy?.wins}-${levelStats.easy?.losses}, Aggressive ${levelStats.hard?.wins}-${levelStats.hard?.losses}`);
 console.log(`${passed} tests passed${process.exitCode ? " (with failures)" : ""}.`);
 console.log(`Balance over ${games} AI games: Fourth ${tally.fourth}, Tenth ${tally.tenth}, draws ${tally.draw}; avg combined score ${(scoreSum / games).toFixed(1)}`);
 console.log(`Crisis types: ${JSON.stringify(crisis)}; tasks executed ${tasksDone}/${tasksTotal} (${(tasksDone / games / 6).toFixed(1)} per game-turn for both armies)`);

@@ -216,5 +216,6 @@
     commandsCountTowardRff: true,
     planTimerMinutes: 0,
     aiSpeed: 1,
+    aiLevel: "normal",
   };
 })();

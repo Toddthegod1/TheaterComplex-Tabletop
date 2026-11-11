@@ -241,7 +241,6 @@ kbd { font: 12px var(--body); background: var(--panel2); border: 1px solid var(-
 .taskcard:hover { transform: translateY(-10px) scale(1.04); box-shadow: 0 14px 26px rgba(0, 0, 0, 0.6); z-index: 2; }
 .taskcard.planned { opacity: 0.35; filter: grayscale(0.6); }
 .taskcard.blocked::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.0) 0 10px, rgba(0, 0, 0, 0.25) 10px 20px); }
-.taskcard .ok { position: absolute; left: 4px; bottom: 4px; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(0, 0, 0, 0.72); }
 .taskchip {
   display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: 7px;
   background: rgba(91, 110, 47, 0.25); border: 1px solid rgba(140, 170, 80, 0.45); font-size: 12px; cursor: pointer; max-width: 100%;
@@ -629,3 +628,40 @@ tr.rowflash td { animation: rowbg 2.8s ease-out both; animation-delay: var(--ago
 .endgrid .clegend { justify-content: center; margin-top: 10px; }
 .tzone { font: 700 10.5px var(--body); background: #2f8a5a; color: #fff; border-radius: 9px; padding: 1px 8px; }
 .spendbtn { white-space: nowrap; }
+
+/* ---------------------------------------------------------------- beginner guidance */
+.gold { color: var(--gold2); }
+.yourmove {
+  margin: 0 0 10px; padding: 8px 10px; border-radius: 9px; font-size: 13px; line-height: 1.4;
+  background: rgba(224, 168, 62, 0.12); border: 1px solid rgba(224, 168, 62, 0.55); color: #f4ead2;
+  animation: movein 0.35s ease-out;
+}
+.yourmove .k { display: block; font-family: var(--head); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold2); margin-bottom: 2px; }
+.yourmove.wait { background: rgba(255, 255, 255, 0.04); border-color: var(--line2); color: var(--muted); }
+.yourmove.wait .k { color: var(--muted); }
+@keyframes movein { from { transform: translateY(-4px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Suggested task cards in the planning hand */
+.taskcard.suggested { box-shadow: 0 0 0 2px var(--gold2), 0 0 16px rgba(243, 199, 104, 0.35), 0 4px 12px rgba(0, 0, 0, 0.5); }
+.taskcard .sugg {
+  position: absolute; top: 4px; right: 4px; z-index: 1; font: 700 10.5px var(--head); letter-spacing: 0.04em;
+  background: var(--gold2); color: #1b1404; border-radius: 5px; padding: 1px 5px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Toasts move to the bottom-left while a full-screen panel is open */
+.toast-wrap.low { top: auto; bottom: 16px; right: auto; left: 16px; flex-direction: column-reverse; }
+.toast-wrap.low .toast { width: 320px; opacity: 0.95; }
+
+/* Year in review (end-of-turn panel) */
+.yrtitle { font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.yrtitle:not(:first-child) { margin-top: 16px; }
+.yr { border-radius: 12px; padding: 10px 12px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line2); text-align: left; }
+.yr.t4 { border-color: rgba(90, 162, 255, 0.45); }
+.yr.t10 { border-color: rgba(255, 159, 90, 0.45); }
+.yrh { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.yrt { font: 700 20px var(--head); }
+.yrl { font-size: 12.5px; padding: 2px 0; }
+.yrl b { display: inline-block; min-width: 26px; font-family: var(--head); }
+.banner.tip { margin-top: 12px; background: rgba(76, 195, 138, 0.08); border-color: rgba(76, 195, 138, 0.45); text-align: left; }
+.banner.tip ul { margin: 6px 0 0; padding-left: 18px; }
+.banner.tip li { margin: 3px 0; }

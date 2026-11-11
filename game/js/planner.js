@@ -16,7 +16,7 @@
 
   // ================================================================ task planner
   TC.planner = {
-    open(num) {
+    open(num, preferZone) {
       const s = App.state;
       const me = App.me();
       const task = TC.taskByNum(num);
@@ -25,7 +25,8 @@
         return TC.planner.edit(t.uid);
       }
       const branch = task.branches ? task.branches[0].key : null;
-      const zone = TC.ZONES.find((z) => E.evaluateTask(s, me, { num, zone: z, branch }).ok) || TC.ZONES.slice().sort((a, b) => E.evaluateTask(s, me, { num, zone: a, branch }).issues.length - E.evaluateTask(s, me, { num, zone: b, branch }).issues.length)[0];
+      const ok = (z) => E.evaluateTask(s, me, { num, zone: z, branch }).ok;
+      const zone = (preferZone && ok(preferZone) && preferZone) || TC.ZONES.find(ok) || TC.ZONES.slice().sort((a, b) => E.evaluateTask(s, me, { num, zone: a, branch }).issues.length - E.evaluateTask(s, me, { num, zone: b, branch }).issues.length)[0];
       App.openModal({ type: "planner", num, zone, branch, options: [], commands: null, caps: null, uid: null });
     },
     edit(uid) {
@@ -188,7 +189,12 @@
     // Costs & effects preview
     const cost = [];
     if (task.cost.influence) cost.push(`<span class="chip ${s.teams[me].influence + (m.uid ? task.cost.influence : 0) >= task.cost.influence ? "" : "badc"}">Influence −${task.cost.influence} (have ${s.teams[me].influence + (m.uid ? task.cost.influence : 0)})</span>`);
-    if (task.cost.access) cost.push(`<span class="chip ${s.teams[me].access[m.zone] >= task.cost.access ? "" : "badc"}">Zone ${m.zone} Access −${task.cost.access} (have ${s.teams[me].access[m.zone]})</span>`);
+    if (task.cost.access) {
+      // When editing, this task's own reservation counts as available again.
+      const self = m.uid && s.plans[me].tasks.find((t) => t.uid === m.uid);
+      const have = s.teams[me].access[m.zone] + (self && self.zone === m.zone ? self.reserved.access : 0);
+      cost.push(`<span class="chip ${have >= task.cost.access ? "" : "badc"}">Zone ${m.zone} Access −${task.cost.access} (have ${have})</span>`);
+    }
     const zs = s.teams[me].zones[m.zone];
     const eff = Object.entries(req.effects)
       .filter(([, v]) => v)
