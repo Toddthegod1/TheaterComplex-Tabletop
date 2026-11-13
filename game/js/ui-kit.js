@@ -99,10 +99,89 @@
     return `<div class="pips ${K.teamCls(team)} ${right ? "right" : ""}">${s}</div>`;
   };
 
+  // ---------------------------------------------------------------- tracker impact
+  // What a set of tracker changes would mean for `me` in `zone`, in plain words.
+  // Returns { lines: [{ tone, html }], before, after, theirs }: before/after are
+  // this army's expected crisis roll there, theirs is the enemy's.
+  K.impact = function (s, me, zone, effects) {
+    const opp = TC.other(me);
+    const oppName = TC.TEAM_INFO[opp].name;
+    const z = s.teams[me].zones[zone];
+    const oz = s.teams[opp].zones[zone];
+    const lines = [];
+    const add = (tone, html) => lines.push({ tone, html });
+    const nextStep = (key, after) => {
+      const cur = R.legend(key, zone, after);
+      for (let v = after + 1; v <= TC.TRACKER_MAX; v++) if (R.legend(key, zone, v) !== cur) return v - after;
+      return null;
+    };
+    Object.entries(effects || {}).forEach(([k, v]) => {
+      if (!v) return;
+      if (["partnerCap", "infrastructure", "interop", "stockage"].includes(k)) {
+        const after = R.clamp(z[k] + v, TC.TRACKER_MIN, TC.TRACKER_MAX);
+        const a = R.legend(k, zone, z[k]);
+        const b = R.legend(k, zone, after);
+        const what = { partnerCap: "Partner die", infrastructure: "Theater Army d6 dice", interop: "Partner d4 dice", stockage: "Bonus on each Theater Army die" }[k];
+        const show = (x) => (k === "partnerCap" ? `d${x}` : k === "stockage" ? `${x > 0 ? "+" : ""}${x}` : `×${x}`);
+        if (a !== b) add("good", `<b>${what}: ${show(a)} → ${show(b)}</b>`);
+        else {
+          const n = nextStep(k, after);
+          add("muted", `${TC.EFFECT_LABELS[k]} ${z[k]} → ${after}: no dice change yet${n ? ` (${n} more for the next step)` : " (already at the top)"}`);
+        }
+      } else if (["intel", "comms", "protection"].includes(k)) {
+        const after = R.clamp(z[k] + v, TC.TRACKER_MIN, TC.TRACKER_MAX);
+        const name = TC.EFFECT_LABELS[k];
+        if (z[k] <= oz[k] && after > oz[k]) add("good", `<b>Takes the ${name} advantage</b> (${after} vs ${oz[k]})`);
+        else if (after === oz[k]) add("warn", `Ties ${oppName} on ${name} (${after}–${oz[k]}): neither side gets the advantage`);
+        else if (after < oz[k]) add("muted", `Still behind on ${name} (${after} vs ${oz[k]})`);
+        else add("muted", `Extends the ${name} lead (${after} vs ${oz[k]}): already ahead`);
+      } else if (k === "assurance") {
+        const after = R.clamp(z.assurance + v, TC.TRACKER_MIN, TC.TRACKER_MAX);
+        if (after >= 6) add("bad", `<b>Assurance reaches ${after}</b>: blocks agreements and security cooperation here, and adds +${after >= 7 ? 2 : 1} Instability`);
+        else if (z.assurance <= 1) add("good", `<b>Ends doubled capability requirements</b> (Assurance 1 → ${after})`);
+        else add("muted", `Assurance ${z.assurance} → ${after}: a buffer against even-turn decay`);
+      } else if (k === "influence") {
+        const after = R.clamp(s.teams[me].influence + v, 0, TC.INFLUENCE_MAX);
+        const oi = s.teams[opp].influence;
+        add(after > oi && s.teams[me].influence <= oi ? "good" : "muted", `Influence ${s.teams[me].influence} → ${after} (${oppName} has ${oi}; higher earns +1 point each turn)`);
+      } else if (k === "access") {
+        const after = R.clamp(s.teams[me].access[zone] + v, 0, TC.ACCESS_MAX);
+        add("muted", `Access in Zone ${zone} ${s.teams[me].access[zone]} → ${after}: pays for agreements and some tasks here`);
+      }
+    });
+    // Expected crisis roll before vs after, using a copy of this army's trackers.
+    const sim = Object.assign({}, s, { teams: Object.assign({}, s.teams, { [me]: JSON.parse(JSON.stringify(s.teams[me])) }) });
+    R.applyEffects(sim, me, zone, effects || {}, 1);
+    return {
+      lines,
+      before: R.expectedDice(R.readiness(s, me, zone)),
+      after: R.expectedDice(R.readiness(sim, me, zone)),
+      theirs: R.expectedDice(R.readiness(s, opp, zone)),
+    };
+  };
+
   // ---------------------------------------------------------------- art preview on hover
   let previewEl = null;
   K.installPreview = function () {
     document.addEventListener("mouseover", (e) => {
+      // Task cards get the impact inspector instead of a plain art preview.
+      const ins = e.target.closest("[data-inspect]");
+      if (ins && K.inspect) {
+        if (ins === inspecting) return;
+        const html = K.inspect(ins);
+        if (html) {
+          inspecting = ins;
+          if (!previewEl) {
+            previewEl = document.createElement("div");
+            document.body.appendChild(previewEl);
+          }
+          previewEl.className = "preview inspector";
+          previewEl.innerHTML = html;
+          previewEl.style.left = previewEl.style.top = "";
+          previewEl.style.display = "block";
+          return;
+        }
+      }
       const el = e.target.closest("[data-art]");
       if (!el || el.closest(".preview")) return;
       const art = el.getAttribute("data-art");
@@ -112,6 +191,9 @@
         previewEl.className = "preview";
         document.body.appendChild(previewEl);
       }
+      if (inspecting && K.uninspect) K.uninspect();
+      inspecting = null;
+      previewEl.className = "preview";
       const isTask = art.includes("/tasks/");
       const w = isTask ? 240 : 220;
       previewEl.innerHTML = `<img src="${art}" width="${w}">`;
@@ -125,10 +207,15 @@
       previewEl.style.display = "block";
     });
     document.addEventListener("mouseout", (e) => {
-      const el = e.target.closest("[data-art]");
-      if (el && previewEl && !el.contains(e.relatedTarget)) previewEl.style.display = "none";
+      const el = e.target.closest("[data-inspect],[data-art]");
+      if (el && previewEl && !el.contains(e.relatedTarget)) K.hidePreview();
     });
-    document.addEventListener("mousedown", () => previewEl && (previewEl.style.display = "none"));
+    document.addEventListener("mousedown", () => K.hidePreview());
   };
-  K.hidePreview = () => previewEl && (previewEl.style.display = "none");
+  let inspecting = null;
+  K.hidePreview = () => {
+    if (previewEl) previewEl.style.display = "none";
+    if (inspecting && K.uninspect) K.uninspect();
+    inspecting = null;
+  };
 })();

@@ -20,13 +20,15 @@
     { title: "Defense readiness", board: true, target: "#zone-B .readiness", place: "right", body: "<p>These are the dice each army would roll if a crisis struck Zone B <b>right now</b>. Your whole campaign is about improving this pool, in the right zones.</p>", next: true },
     { title: "Roll for the task limit", target: "#btn-roll", place: "below", body: "<p>Every turn starts with the adjudicator rolling a d6 for how many tasks each army may plan (minimum 3).</p>", do: "Click <b>Roll for task limit</b>.", when: () => S().phase !== "taskLimit" },
     { title: "Task limit & ASOS", target: "#btn-continue", place: "above", body: "<p>That's your task budget for the year. The brown cards are <b>ASOS</b> requests: the Air Force, Navy and Marines need Army support, and you must supply it before planning.</p>", do: "Click <b>Continue</b>.", when: () => !App.ui.overlay },
-    { title: "Support the other Services", target: ".dock", place: "above", body: "<p>Commit capability cards of the requested types from any zone. They're unavailable for tasks this turn, but they still count for deterrence.</p>", do: "Click <b>Allocate forces</b>, then <b>Auto-select</b> and <b>Commit forces</b>. Repeat for each request.", when: () => E.asosComplete(S(), "fourth") && !modalType() },
+    { title: "Support the other Services", target: ".dock", place: "above", body: "<p>Commit capability cards of the requested types from any zone. They're unavailable for tasks this turn, but they still count for deterrence.</p>", do: "Click <b>Allocate forces</b>, then <b>Auto-select</b> and <b>Commit forces</b>. Repeat for each request.",
+      // While the ASOS window is open, point at its next button instead of the bar behind it.
+      modalTarget: () => (document.querySelector("#as-confirm:not([disabled])") ? "#as-confirm" : document.querySelector("[data-act='as-auto']:not([disabled])") ? "[data-act='as-auto']" : "[data-act='as-unmet']"), when: () => E.asosComplete(S(), "fourth") && !modalType() },
     { title: "On to planning", target: "[data-act='asos-done']", place: "above", body: "<p>All requests supported.</p>", do: "Click <b>Proceed to planning</b>.", when: () => S().phase === "planning" },
     { title: "Your task cards", target: "#hand", place: "above", body: "<p>These are your 21 task cards. Each shows its <b>effects</b> and cost, and the <b>A B C</b> letters turn green where you can plan it right now. No green letter means a capability or MSC is missing, so you'd need to request it.</p><p>Cards with a gold <b>★</b> are your operations officer's suggestions, with the best zone. Use the filter buttons to find tasks by effect (for example, <b>Intel</b>). Hover a card to see the full art.</p>", next: true },
     { title: "Staff & commands", target: "#boards", place: "left", body: "<p>Every task uses <b>staff</b> slots (left) and <b>MSC</b> slots (right). An MSC's first two tasks are free. A 3rd, 4th or 5th task is <b>over-tasked</b> (red): it needs a d6 roll to succeed and costs you a point.</p>", next: true },
     { title: "Plan a task", target: "#hand", place: "above", body: "<p>Military Engagement (task 12) builds Access, Influence and Partner Capability. Civil Affairs in Zone B can carry it.</p>", do: "Click the <b>Military engagement (12)</b> card, or any card with a green zone letter.", when: () => modalType() === "planner" || S().plans.fourth.tasks.length > 0 },
     { title: "The task planner", target: "#pl-confirm", place: "above", body: "<p>The planner checks every requirement: zone, staff, MSCs and capabilities. It auto-assigns sensible choices, and you can click cards to change them. The left side previews the tracker gains.</p><p>Green dots mark zones where the task is feasible, and <b>★ best</b> marks where it pays off most. The list under the effects tells you what changes for the crisis dice.</p>", do: "Click <b>Add to campaign</b>.", when: () => S().plans.fourth.tasks.length > 0 && modalType() !== "planner" },
-    { title: "Build your campaign", target: "#hand", place: "above", body: "<p>Add more tasks, up to your limit. Aim for:</p><ul><li>trackers that <b>flip an advantage</b> (Intel, Comms, Protection) in a zone,</li><li>trackers that cross a <b>die breakpoint</b>,</li><li>your objective, <b>Zone C</b>.</li></ul><p>Not sure? <b>✨ Suggest a plan</b> fills the empty slots for you, and you can still change them.</p>", do: "Plan more tasks, then click <b>Next</b>.", next: true },
+    { title: "Build your campaign", target: "#hand", place: "above", body: "<p>Add more tasks, up to your limit. Aim for:</p><ul><li>trackers that <b>flip an advantage</b> (Intel, Comms, Protection) in a zone,</li><li>trackers that cross a <b>die breakpoint</b>,</li><li>your objective, <b>Zone C</b>.</li></ul><p>Not sure? <b>✨ Suggest a plan</b> fills the empty slots for you, and you can still change them.</p>", do: "Plan more tasks, then click <b>Next</b>.", modalTarget: () => "#pl-confirm", next: true },
     { title: "Force management", target: "#btn-forces", place: "above", body: "<p>Tasks need capabilities <b>in the right zone</b>. Force Management lets you request forces from the global pool (RFF, max 10 in theater), move units between zones, and pick RSOI arrivals. Everything arrives at the <b>end</b> of the turn, ready for next year.</p>", do: "Open <b>Force management</b>.", when: () => modalType() === "forces" || S().plans.fourth.ready },
     { title: "Requests for forces", target: ".modal-foot .btn.primary", place: "above", body: "<p>Click a zone letter under a GFM card to request it there. Combat units (0 pts) only add deterrence. Support units also carry capability points for tasks.</p><p>Watch the deterrence gap: closing it lowers Instability, but towering over the enemy raises it.</p>", do: "Request something if you like, then click <b>Done</b>.", when: () => modalType() !== "forces" },
     { title: "Submit the plan", target: "#btn-submit", place: "above", body: "<p>Once you submit, your plan is locked. Tenth Army has been planning in secret too.</p>", do: "Click <b>Submit plan</b>.", when: () => S().plans.fourth.ready },
@@ -182,7 +184,16 @@
       return;
     }
     const idx = STEPS.indexOf(st);
-    const target = st.target ? document.querySelector(st.target) : null;
+    let target = st.target ? document.querySelector(st.target) : null;
+    // A window (modal or overlay) on top of the target would be darkened by the
+    // spotlight. Point at something inside that window instead, or at nothing.
+    const layer = document.querySelector("#modal-root .veil") || document.querySelector("#overlay-root .veil");
+    const covered = !!layer && (!target || !layer.contains(target));
+    if (covered) {
+      const sel = st.modalTarget && st.modalTarget();
+      const inner = sel && layer.querySelector(sel);
+      target = inner || null;
+    }
     const r = target ? target.getBoundingClientRect() : null;
     const visible = r && r.width > 0 && r.height > 0;
     const ch = chapterOf(idx);
@@ -201,7 +212,7 @@
         <button class="btn sm ghost" data-act="tut-skip" title="Hide the coach and play on">Skip</button>`;
     }
     const doLine = st.do ? `<div class="do ${reviewing ? "done" : ""}">${reviewing ? "✔ " : "▶ "}${st.do}</div>` : "";
-    root.innerHTML = `${visible ? `<div class="spot" style="left:${r.left - 6}px;top:${r.top - 6}px;width:${r.width + 12}px;height:${r.height + 12}px"></div>` : ""}
+    root.innerHTML = `${visible ? `<div class="spot ${layer ? "light" : ""}" style="left:${r.left - 6}px;top:${r.top - 6}px;width:${r.width + 12}px;height:${r.height + 12}px"></div>` : ""}
       <div class="coach ${reviewing ? "reviewing" : ""}" style="left:0;top:0;visibility:hidden">
         <div class="chead"><span class="k">Chapter ${ch + 1} of ${CHAPTERS.length} · ${esc(CHAPTERS[ch].name)}</span><span class="k">${idx + 1} / ${STEPS.length}</span></div>
         <div class="cprog"><b style="width:${pct}%"></b></div><div class="cchap">${chapters}</div>

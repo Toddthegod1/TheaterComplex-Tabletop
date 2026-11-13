@@ -342,7 +342,7 @@
       const warn = key === "assurance" ? (i) => i === 1 || i >= 6 : null;
       const f4 = fx(`fourth.${zone}.${key}`);
       const f10 = fx(`tenth.${zone}.${key}`);
-      return `<tr class="${f4.cls || f10.cls ? "rowflash" : ""}"${f4.style || f10.style}><td>${K.pips(a, "fourth", false, warn)}</td><td class="val ${lead4 ? "lead" : ""}${f4.cls}"${f4.style}>${va}${f4.html}</td>
+      return `<tr data-k="${key}" class="${f4.cls || f10.cls ? "rowflash" : ""}"${f4.style || f10.style}><td>${K.pips(a, "fourth", false, warn)}</td><td class="val ${lead4 ? "lead" : ""}${f4.cls}"${f4.style}>${va}${f4.html}</td>
         <td class="lab"><span title="${esc(tip)}">${mid}</span></td>
         <td class="val ${lead10 ? "lead" : ""}${f10.cls}"${f10.style}>${vb}${f10.html}</td><td>${K.pips(b, "tenth", true, warn)}</td></tr>`;
     };
@@ -387,7 +387,7 @@
           ${row("intel", "Intelligence", "cmp")}
           ${row("comms", "Communications", "cmp")}
           ${row("protection", "Protection", "cmp")}
-          <tr><td></td><td class="val c4${fx(`fourth.access.${zone}`).cls}"${fx(`fourth.access.${zone}`).style}>${s.teams.fourth.access[zone]}${fx(`fourth.access.${zone}`).html}</td><td class="lab"><span title="Access in this zone — spent by agreements, stockage and police tasks">Access</span></td><td class="val c10${fx(`tenth.access.${zone}`).cls}"${fx(`tenth.access.${zone}`).style}>${s.teams.tenth.access[zone]}${fx(`tenth.access.${zone}`).html}</td><td></td></tr>
+          <tr data-k="access"><td></td><td class="val c4${fx(`fourth.access.${zone}`).cls}"${fx(`fourth.access.${zone}`).style}>${s.teams.fourth.access[zone]}${fx(`fourth.access.${zone}`).html}</td><td class="lab"><span title="Access in this zone — spent by agreements, stockage and police tasks">Access</span></td><td class="val c10${fx(`tenth.access.${zone}`).cls}"${fx(`tenth.access.${zone}`).style}>${s.teams.tenth.access[zone]}${fx(`tenth.access.${zone}`).html}</td><td></td></tr>
         </table>
         <div class="readiness">${dieBox("fourth", p4)}${dieBox("tenth", p10)}</div>
         <div class="forces">${forces("fourth")}${forces("tenth")}<span style="flex:1"></span><button class="btn sm" data-act="mat" data-z="${zone}">Capability mat</button></div>
@@ -494,6 +494,95 @@
     return `<div class="logbox"><div class="h"><h4 style="font-size:13px;letter-spacing:.14em;color:var(--muted)">ADJUDICATOR LOG</h4></div>${items.join("")}</div>`;
   }
 
+  // ---------------------------------------------------------------- card inspector
+  // Hovering a task card explains, zone by zone, what it would change and what
+  // that means for the crisis dice. The matching rows on the board light up
+  // with the new value next to the current one.
+  K.inspect = function (el) {
+    const s = App.state;
+    const team = el.dataset.team;
+    if (!s || App.ui.screen !== "game" || App.ui.modal || !team) return null;
+    const plan = s.plans[team];
+    const entry = el.dataset.uid ? plan.tasks.find((t) => t.uid === Number(el.dataset.uid)) : plan.tasks.find((t) => t.num === Number(el.dataset.num));
+    const task = TC.taskByNum(entry ? entry.num : Number(el.dataset.num));
+    if (!task) return null;
+    const branch = entry ? entry.branch : task.branches ? task.branches[0].key : null;
+    const req = R.taskRequirement(task, branch, entry ? entry.options : []);
+    const zones = entry ? [entry.zone] : TC.ZONES;
+    const opp = TC.other(team);
+    const executing = el.dataset.inspect === "task" && s.phase === "implementation";
+
+    const chips = Object.entries(req.effects)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `<span class="chip goodc">${v > 0 ? "+" : "−"}${Math.abs(v)} ${TC.EFFECT_LABELS[k]}</span>`)
+      .concat(Object.entries(req.oppEffects).filter(([, v]) => v).map(([k, v]) => `<span class="chip badc">Enemy ${TC.EFFECT_LABELS[k]} ${v > 0 ? "+" : "−"}${Math.abs(v)}</span>`));
+    if (task.special === "rsoi") chips.push('<span class="chip goodc">Up to 3 extra forces arrive at year end</span>');
+    const cost = Object.entries(task.cost).map(([k, v]) => (k === "influence" ? `◆${v} Influence` : `${v} Access in the zone`)).join(" + ");
+    const branchNote = task.branches ? `<div class="inote">Shown: “${esc(task.branches.find((b) => b.key === branch).label)}”. ${entry ? "" : "The other option is in the planner."}</div>` : "";
+
+    const hasEffects = Object.values(req.effects).some(Boolean);
+    const blocks = zones.map((z) => {
+      const ok = !!entry || E.evaluateTask(s, team, { num: task.num, zone: z, branch }).ok;
+      const im = K.impact(s, team, z, req.effects);
+      // Important lines first, then the quieter ones ("no dice change yet"), up to four.
+      const shown = im.lines.filter((l) => l.tone !== "muted").concat(im.lines.filter((l) => l.tone === "muted")).slice(0, 4);
+      return { z, ok, im, gain: im.after - im.before, shown };
+    });
+    const ranked = blocks.filter((b) => b.ok && b.gain > 0.01).sort((a, b) => b.gain - a.gain);
+    const best = el.dataset.z || (zones.length > 1 && ranked[0] ? ranked[0].z : null);
+    const zoneHtml = hasEffects
+      ? blocks
+          .map((b) => {
+            const up = b.gain > 0.01;
+            const star = best === b.z ? '<span class="sugg-inline">★ best here</span>' : "";
+            return `<div class="iz ${b.ok ? "" : "off"} ${best === b.z ? "best" : ""}">
+              <div class="izh"><b>Zone ${b.z}</b>${star}${b.ok ? "" : '<span class="faint">can\'t plan here now</span>'}
+                <span class="izroll ${up ? "up" : ""}" title="Your expected crisis roll in Zone ${b.z} (enemy ≈ ${b.im.theirs.toFixed(1)})">🎲 ${b.im.before.toFixed(1)}${up ? ` → <b>${b.im.after.toFixed(1)}</b>` : ""} <span class="faint">vs ${b.im.theirs.toFixed(1)}</span></span></div>
+              <ul class="impact">${b.shown.map((l) => `<li class="${l.tone}">${l.html}</li>`).join("") || '<li class="muted">No change to the trackers here.</li>'}</ul></div>`;
+          })
+          .join("")
+      : "";
+    let foot;
+    if (executing) foot = `Execute applies these now.${E.canDisrupt(s, team, entry.uid) ? ` ⚡ As Disruption, ${TC.TEAM_INFO[opp].name} loses them instead.` : ""}`;
+    else if (entry) foot = `In your campaign for Zone ${entry.zone}. Click to change it.`;
+    else foot = "Click the card to plan it.";
+
+    App.boardPreview(team, zones, req.effects);
+    return `<div class="ihead"><img src="${task.art[team].front}" alt=""><div><div class="iname"><b>${task.num}</b> ${esc(task.name)}</div>
+        <div class="ichips">${chips.join("") || '<span class="muted">No tracker change</span>'}</div>${cost ? `<div class="inote">Costs ${cost}.</div>` : ""}</div></div>
+      ${branchNote}
+      ${hasEffects ? `<div class="ilabel">What it does ${zones.length > 1 ? "in each zone" : `in Zone ${zones[0]}`} <span class="faint">· 🎲 = your expected crisis roll</span></div>${zoneHtml}` : ""}
+      <div class="ifoot">${foot}</div>`;
+  };
+
+  // Light up the tracker rows a task would change, with the new value beside the old.
+  App.boardPreview = function (team, zones, effects) {
+    K.uninspect();
+    const s = App.state;
+    const col = team === "fourth" ? 1 : 3;
+    Object.entries(effects || {}).forEach(([k, v]) => {
+      if (!v) return;
+      if (k === "influence") {
+        const el = document.querySelector(`.scorebox .side.${K.teamCls(team)} .inf`);
+        if (el) el.classList.add("pv-hl");
+        return;
+      }
+      zones.forEach((z) => {
+        const tr = document.querySelector(`#zone-${z} tr[data-k="${k}"]`);
+        if (!tr) return;
+        const cur = k === "access" ? s.teams[team].access[z] : s.teams[team].zones[z][k];
+        const after = R.clamp(cur + v, k === "access" ? 0 : TC.TRACKER_MIN, k === "access" ? TC.ACCESS_MAX : TC.TRACKER_MAX);
+        tr.classList.add("pv-hl");
+        if (after !== cur) tr.children[col].insertAdjacentHTML("beforeend", `<span class="pv-ghost ${col === 1 ? "r" : "l"}">→${after}</span>`);
+      });
+    });
+    if (zones.length === 1) document.getElementById(`zone-${zones[0]}`)?.classList.add("pv-zone");
+  };
+  K.uninspect = function () {
+    document.querySelectorAll(".pv-ghost").forEach((g) => g.remove());
+    document.querySelectorAll(".pv-hl, .pv-zone").forEach((x) => x.classList.remove("pv-hl", "pv-zone"));
+  };
+
   // ---------------------------------------------------------------- dock
   function renderDock(s) {
     const me = App.me();
@@ -577,7 +666,7 @@
         .map(([k, v]) => `<span class="tcost">${k === "influence" ? "◆" : "Acc"}−${v}</span>`)
         .join("");
       const star = tip ? `<span class="sugg" title="${tip.rank === 0 ? "Top suggestion" : "Suggested"}: a strong pick in Zone ${tip.zone} right now">★ ${tip.zone}</span>` : "";
-      return `<div class="taskcard tc2 ${planned ? "planned" : ""} ${!anyOk && !planned ? "blocked" : ""} ${tip ? "suggested" : ""}" data-act="task-open" data-num="${task.num}" ${tip ? `data-z="${tip.zone}"` : ""} data-art="${task.art[me].front}" title="${esc(task.name)}${mode ? " (" + mode + ")" : ""} — click to plan">${star}
+      return `<div class="taskcard tc2 ${planned ? "planned" : ""} ${!anyOk && !planned ? "blocked" : ""} ${tip ? "suggested" : ""}" data-act="task-open" data-num="${task.num}" ${tip ? `data-z="${tip.zone}"` : ""} data-inspect="plan" data-team="${me}" data-art="${task.art[me].front}">${star}
         <img src="${task.art[me].front}" alt="" loading="lazy">
         <div class="tinfo"><div class="tname"><b>${task.num}</b> ${esc(task.name)}${task.mode !== "N" ? ` <span class="tmode">${task.mode}</span>` : ""}</div>
           <div class="teff">${effectSummary(task)}</div>
@@ -589,14 +678,14 @@
     const list = plan.tasks
       .map((t) => {
         const task = TC.taskByNum(t.num);
-        return `<div class="taskchip ${K.teamCls(me)}" data-act="task-edit" data-uid="${t.uid}" data-art="${task.art[me].front}" title="Click to edit"><span class="n">${t.num}</span>${esc(task.name)} <span class="chip">Zone ${t.zone}</span><button class="btn sm ghost" data-act="task-remove" data-uid="${t.uid}" title="Remove">✕</button></div>`;
+        return `<div class="taskchip ${K.teamCls(me)}" data-act="task-edit" data-uid="${t.uid}" data-inspect="task" data-team="${me}" data-art="${task.art[me].front}"><span class="n">${t.num}</span>${esc(task.name)} <span class="chip">Zone ${t.zone}</span><button class="btn sm ghost" data-act="task-remove" data-uid="${t.uid}" title="Remove">✕</button></div>`;
       })
       .join("");
     const issues = E.planIssues(s, me);
     const rff = E.rffProjected(s, me);
     const timer = s.settings.planTimerMinutes ? `<span class="chip" id="plan-timer">⏱ --:--</span>` : "";
     return `<footer class="dock">
-      <div class="col grow" style="min-width:0"><h3>Task cards <span class="chip">${plan.tasks.length} / ${s.taskLimit} planned</span>${timer}<span class="muted" style="text-transform:none;letter-spacing:0;font-size:12px">Click a card to plan it · hover to enlarge</span></h3>
+      <div class="col grow" style="min-width:0"><h3>Task cards <span class="chip">${plan.tasks.length} / ${s.taskLimit} planned</span>${timer}<span class="muted" style="text-transform:none;letter-spacing:0;font-size:12px">Hover a card to see what it changes · click to plan it</span></h3>
         <div class="seg handfilters">${filters}</div>
         <div class="hand" id="hand">${hand || `<div class="muted" style="padding:20px">No task cards match this filter.</div>`}</div></div>
       <div class="col" style="width:290px"><h3>Campaign ${K.teamChip(me)}</h3><div class="col scroll" style="gap:6px;max-height:150px">${list || '<div class="muted">No tasks yet.</div>'}</div>
@@ -652,7 +741,7 @@
                 .join("");
             const eff = task.special === "rsoi" ? '<span class="te">+3 GFM forces</span>' : fmt(req.effects) + fmt(req.oppEffects, true);
             const n = over.length ? (impl.commandMarkers[over[0]] || 0) + 1 : 0;
-            return `<div class="col execcard"><div class="taskcard tc2" data-art="${task.art[active].front}" title="${esc(task.name)}: hover to see the card">
+            return `<div class="col execcard"><div class="taskcard tc2" data-inspect="task" data-team="${active}" data-uid="${t.uid}" data-art="${task.art[active].front}">
               <img src="${task.art[active].front}" alt="" loading="lazy">
               <div class="tinfo"><div class="tname"><b>${task.num}</b> ${esc(task.name)}</div><div class="teff">${eff || '<span class="muted" style="font-size:11px">no tracker change</span>'}</div>
               <div class="tfoot"><span class="tzone">Zone ${t.zone}</span></div></div></div>

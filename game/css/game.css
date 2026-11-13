@@ -665,3 +665,45 @@ tr.rowflash td { animation: rowbg 2.8s ease-out both; animation-delay: var(--ago
 .banner.tip { margin-top: 12px; background: rgba(76, 195, 138, 0.08); border-color: rgba(76, 195, 138, 0.45); text-align: left; }
 .banner.tip ul { margin: 6px 0 0; padding-left: 18px; }
 .banner.tip li { margin: 3px 0; }
+
+/* Tutorial spotlight inside an open window: ring only, light dim, so the window stays readable */
+.spot.light { box-shadow: 0 0 0 3px #b9d58a, 0 0 18px 4px rgba(185, 213, 138, 0.6), 0 0 0 9999px rgba(4, 7, 10, 0.15); }
+
+
+/* ---------------------------------------------------------------- card inspector (hover a task card) */
+.preview.inspector {
+  left: auto; right: 10px; top: 58px; width: 350px; max-height: calc(100vh - 70px); overflow: auto;
+  background: #141d25; border: 1px solid var(--line2); border-radius: 12px; padding: 12px; color: var(--text); font-size: 12.5px;
+}
+.inspector .ihead { display: flex; gap: 10px; align-items: flex-start; }
+.inspector .ihead img { width: 58px; border-radius: 6px; flex: none; }
+.inspector .iname { font: 700 17px var(--head); letter-spacing: 0.02em; margin-bottom: 4px; }
+.inspector .iname b { background: var(--task); color: #fff; border-radius: 4px; padding: 0 5px; margin-right: 4px; }
+.inspector .ichips { display: flex; flex-wrap: wrap; gap: 4px; }
+.inspector .inote { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+.inspector .ilabel { font: 600 11px var(--head); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 10px 0 6px; }
+.inspector .iz { border: 1px solid var(--line2); border-radius: 9px; padding: 6px 8px; margin-bottom: 6px; background: rgba(0, 0, 0, 0.22); }
+.inspector .iz.best { border-color: var(--gold2); box-shadow: 0 0 10px rgba(243, 199, 104, 0.2); }
+.inspector .iz.off { opacity: 0.55; }
+.inspector .izh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.inspector .izh > b { font-family: var(--head); font-size: 14px; }
+.inspector .izroll { margin-left: auto; font-size: 12px; white-space: nowrap; }
+.inspector .izroll.up b { color: var(--good); }
+.inspector .sugg-inline { font: 700 10.5px var(--head); background: var(--gold2); color: #1b1404; border-radius: 5px; padding: 0 5px; }
+.inspector ul.impact { margin: 4px 0 0; padding-left: 16px; }
+.inspector ul.impact li { margin: 2px 0; }
+.inspector .ifoot { margin-top: 8px; color: var(--gold2); font-size: 12px; }
+
+/* Board rows the hovered card would change */
+.trk tr.pv-hl td { background: rgba(243, 199, 104, 0.16); }
+.trk tr.pv-hl td.lab span { color: var(--gold2); font-weight: 700; }
+.trk td.val { position: relative; }
+.pv-ghost {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; white-space: nowrap;
+  font: 800 12px var(--head); background: var(--gold2); color: #1b1404; border-radius: 5px; padding: 0 4px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.pv-ghost.r { left: calc(100% - 2px); }
+.pv-ghost.l { right: calc(100% - 2px); }
+.scorebox .inf.pv-hl { outline: 2px solid var(--gold2); border-radius: 6px; }
+.zone.pv-zone { box-shadow: 0 0 0 2px rgba(243, 199, 104, 0.7); }
+.zgain { font-size: 11px; color: var(--good); font-weight: 700; }
