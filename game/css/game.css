@@ -707,3 +707,54 @@ tr.rowflash td { animation: rowbg 2.8s ease-out both; animation-delay: var(--ago
 .scorebox .inf.pv-hl { outline: 2px solid var(--gold2); border-radius: 6px; }
 .zone.pv-zone { box-shadow: 0 0 0 2px rgba(243, 199, 104, 0.7); }
 .zgain { font-size: 11px; color: var(--good); font-weight: 700; }
+
+
+/* ---------------------------------------------------------------- round 3 polish */
+/* Toasts: slimmer, click to dismiss */
+.toast { width: 340px; padding: 8px 12px 8px 8px; gap: 10px; cursor: pointer; border-radius: 10px; }
+.toast:hover { border-color: var(--gold2); }
+.toast img { width: 44px; }
+.toast .t b { font-size: 14.5px; }
+.toast-wrap { gap: 6px; }
+
+/* Score: label the points, and float score changes below the HUD instead of over the names */
+.scorebox { overflow: visible; }
+.scorebox .side:first-child { border-radius: 8px 0 0 8px; }
+.scorebox .side:last-child { border-radius: 0 8px 8px 0; }
+.scorebox .pts small { font-family: Inter, system-ui, sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-left: 3px; text-transform: uppercase; }
+.scorebox .delta { top: 26px; font-size: 16px; z-index: 50; }
+
+/* Keyboard: Enter presses the highlighted button */
+.btn.primary.pulse::after { content: "\21B5"; margin-left: 9px; font-size: 11px; font-weight: 700; opacity: 0.6; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; line-height: 1.5; }
+@media (hover: none) { .btn.primary.pulse::after { display: none; } }
+.btn:focus-visible, [data-act]:focus-visible { outline: 2px solid var(--gold2); outline-offset: 2px; }
+
+/* Filters stay on one line and scroll sideways, so the cards keep their height */
+.handfilters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; flex: none; }
+.handfilters::-webkit-scrollbar { display: none; }
+.handfilters .btn { flex: none; }
+
+/* Crisis screen fits a laptop without scrolling */
+@media (max-height: 820px) {
+  .crisis .modal-head { padding: 9px 18px; }
+  .crisis .modal-body { padding: 10px 18px 8px; }
+  .crisis .ctable td { padding: 3px 2px; }
+  .crisis .trays { margin-top: 8px; gap: 12px; }
+  .crisis .tray { padding: 8px 12px; }
+  .crisis .tray .grp { margin: 5px 0 2px; }
+  .crisis .tray .dice { min-height: 40px; gap: 10px; }
+  .crisis .tray .sum { margin-top: 4px; }
+  .crisis .tray .sum .total { font-size: 32px; }
+  .crisis .pointsline { margin-top: 4px; gap: 3px; }
+  .crisis .taglegend { margin-top: 6px; }
+  .crisis .modal-foot { padding: 8px 18px; }
+}
+
+/* Execute cards share one height so their buttons line up */
+.execcard .taskcard { flex: 1 0 auto; }
+/* The campaign list uses the full dock height, and its rows are tighter on short screens */
+.dock .col.scroll { flex: 1 1 auto; min-height: 0; max-height: none !important; }
+@media (max-height: 820px) {
+  .taskchip { padding-top: 3px; padding-bottom: 3px; font-size: 12.5px; }
+  .taskchip .btn.sm { padding: 1px 6px; }
+}

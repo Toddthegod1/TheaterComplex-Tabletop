@@ -255,7 +255,7 @@
   // ================================================================ confirm dialog
   M.confirm = (m) => `<div class="modal narrow" id="confirm"><div class="modal-head"><h2>${esc(m.title)}</h2><button class="btn ghost x" data-act="close-modal">✕</button></div>
       <div class="modal-body"><p style="margin:0">${esc(m.body)}</p></div>
-      <div class="modal-foot"><button class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary" data-act="${m.act}">${esc(m.yes || "OK")}</button></div></div>`;
+      <div class="modal-foot"><button class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary" data-act="${m.act}" ${m.uid != null ? `data-uid="${esc(String(m.uid))}"` : ""}>${esc(m.yes || "OK")}</button></div></div>`;
 
   // ================================================================ ASOS allocation
   M.asos = function (m) {

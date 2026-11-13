@@ -48,8 +48,9 @@
 
   App.toast = function (html, team, ms = 4200) {
     const id = Math.random().toString(36).slice(2);
-    App.ui.toasts.push({ id, html, team });
-    if (App.ui.toasts.length > 4) App.ui.toasts.splice(0, App.ui.toasts.length - 4);
+    const st = App.ui.screen === "game" ? App.state : null;
+    App.ui.toasts.push({ id, html, team, phase: st && st.phase, turn: st && st.turn });
+    if (App.ui.toasts.length > 3) App.ui.toasts.splice(0, App.ui.toasts.length - 3);
     renderToasts();
     setTimeout(() => {
       App.ui.toasts = App.ui.toasts.filter((t) => t.id !== id);
@@ -142,6 +143,7 @@
     renderOverlay();
     renderModal();
     renderToasts();
+    K.refreshPreview && K.refreshPreview();
     TC.tutorial && TC.tutorial.update();
   };
 
@@ -150,7 +152,10 @@
     // With a full-screen panel open, tuck toasts into the bottom-left corner
     // so they never cover dice, tables or buttons.
     const covered = !!(document.getElementById("overlay-root").innerHTML || document.getElementById("modal-root").innerHTML);
-    el.innerHTML = `<div class="toast-wrap ${covered ? "low" : ""}">${App.ui.toasts.map((t) => `<div class="toast ${t.team ? K.teamCls(t.team) : ""}">${t.html}</div>`).join("")}</div>`;
+    // A message about an earlier phase is stale once the game has moved on.
+    const st = App.ui.screen === "game" ? App.state : null;
+    if (st) App.ui.toasts = App.ui.toasts.filter((t) => !t.phase || (st.phase !== "gameOver" && t.phase === st.phase && t.turn === st.turn));
+    el.innerHTML = `<div class="toast-wrap ${covered ? "low" : ""}">${App.ui.toasts.map((t) => `<div class="toast ${t.team ? K.teamCls(t.team) : ""}" data-act="toast-x" data-id="${t.id}" title="Click to dismiss">${t.html}</div>`).join("")}</div>`;
   }
 
   function renderModal() {
@@ -256,7 +261,7 @@
       const t = s.teams[team];
       const you = App.humans().length === 1 && App.isHuman(team) ? '<span class="you">YOU</span>' : App.state.controllers[team] === "ai" ? '<span class="you" style="color:var(--muted)">AI</span>' : "";
       return `<div class="side ${K.teamCls(team)}"><span class="name"><span class="marker ${TC.TEAM_INFO[team].marker}"></span> <span class="lf">${TC.TEAM_INFO[team].name}</span><span class="ls">${TC.TEAM_INFO[team].short}</span> ${you}</span>
-        <span class="pts${fx(team + ".score").cls}"${fx(team + ".score").style}>${t.score}${fx(team + ".score").html}</span><span class="inf${fx(team + ".influence").cls}"${fx(team + ".influence").style} title="Theater-wide Influence (higher earns +1 point each turn)">◆ ${t.influence} infl.${fx(team + ".influence").html}</span></div>`;
+        <span class="pts${fx(team + ".score").cls}"${fx(team + ".score").style}>${t.score}<small>pts</small>${fx(team + ".score").html}</span><span class="inf${fx(team + ".influence").cls}"${fx(team + ".influence").style} title="Theater-wide Influence (higher earns +1 point each turn)">◆ ${t.influence} infl.${fx(team + ".influence").html}</span></div>`;
     };
     return `<header class="hud">
       <img class="logo" src="img/logo.webp" alt="TheaterComplex">
@@ -685,7 +690,7 @@
     const rff = E.rffProjected(s, me);
     const timer = s.settings.planTimerMinutes ? `<span class="chip" id="plan-timer">⏱ --:--</span>` : "";
     return `<footer class="dock">
-      <div class="col grow" style="min-width:0"><h3>Task cards <span class="chip">${plan.tasks.length} / ${s.taskLimit} planned</span>${timer}<span class="muted" style="text-transform:none;letter-spacing:0;font-size:12px">Hover a card to see what it changes · click to plan it</span></h3>
+      <div class="col grow" style="min-width:0"><h3>Task cards <span class="chip">${plan.tasks.length} / ${s.taskLimit} planned</span>${timer}<span class="muted" style="text-transform:none;letter-spacing:0;font-size:12px">Hover a card to see what it changes · click to plan it · scroll for more</span></h3>
         <div class="seg handfilters">${filters}</div>
         <div class="hand" id="hand">${hand || `<div class="muted" style="padding:20px">No task cards match this filter.</div>`}</div></div>
       <div class="col" style="width:290px"><h3>Campaign ${K.teamChip(me)}</h3><div class="col scroll" style="gap:6px;max-height:150px">${list || '<div class="muted">No tasks yet.</div>'}</div>
@@ -766,7 +771,7 @@
       : "";
     return `<footer class="dock">
       <div class="col grow" style="min-width:0"><h3>Initiative ${K.teamChip(active)} <span class="muted" style="text-transform:none;letter-spacing:0;font-size:12px">${remaining.length} task${remaining.length === 1 ? "" : "s"} left · Disruption ${s.teams[active].disruptionUsed ? "used" : "available"}</span></h3>
-        <div class="hand" style="align-items:flex-start">${cards}</div></div>
+        <div class="hand">${cards}</div></div>
       ${mine ? `<div class="col" style="width:240px"><h3>Reduce Instability</h3><div class="muted" style="font-size:12px">${s.teams[active].influence} Influence available · 3 ◆ cuts a zone's Instability by 1 until year end</div>${spend}</div>` : ""}
       ${commandBoards(s, active)}
     </footer>`;
@@ -1264,6 +1269,10 @@
       if (!s.plans[me].tasks.length && !confirming) {
         return App.confirm({ title: "Submit an empty plan?", body: "You haven't planned any tasks, so your army will do nothing this year.", yes: "Submit anyway", act: "submit" });
       }
+      const open = s.taskLimit - s.plans[me].tasks.length;
+      if (open > 0 && !confirming && !(TC.tutorial && TC.tutorial.active) && TC.ai.suggestions(s, me, 1).length) {
+        return App.confirm({ title: `Submit with ${open} empty task slot${open > 1 ? "s" : ""}?`, body: `You can plan up to ${s.taskLimit} tasks this year and still have cards you could play. "Suggest a plan" fills the empty slots for you.`, yes: "Submit anyway", act: "submit" });
+      }
       App.ui.modal = null;
       const r = E.setReady(s, me, true);
       if (!r.ok) {
@@ -1290,6 +1299,11 @@
       App.flow();
     },
     standdown(el) {
+      if (!(App.ui.modal && App.ui.modal.type === "confirm")) {
+        const t = App.state.plans[App.state.impl.active].tasks.find((x) => x.uid === Number(el.dataset.uid));
+        return App.confirm({ title: "Stand this task down?", body: `${t ? TC.taskByNum(t.num).name : "This task"} will not be executed this year. Its Influence and Access costs are refunded, but it has no effect.`, yes: "Stand down", act: "standdown", uid: el.dataset.uid });
+      }
+      App.ui.modal = null;
       App.do(() => E.standDownTask(App.state, App.state.impl.active, Number(el.dataset.uid)));
     },
     spend(el) {
@@ -1311,6 +1325,10 @@
     "close-modal"() {
       App.closeModal();
     },
+    "toast-x"(el) {
+      App.ui.toasts = App.ui.toasts.filter((t) => t.id !== el.dataset.id);
+      renderToasts();
+    },
   };
   App.actions = actions;
 
@@ -1331,8 +1349,37 @@
     if (fn) fn(el, e);
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && App.ui.modal) App.closeModal();
+    if (e.key === "Escape" && App.ui.modal) return App.closeModal();
+    if (e.key !== "Enter" || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(e.target.tagName)) return;
+    const btn = App.primaryButton();
+    if (btn) {
+      e.preventDefault();
+      btn.click();
+    }
   });
+  // The button Enter presses: the tutorial's Next, else the highlighted (or only)
+  // primary button of the top-most layer.
+  App.primaryButton = function () {
+    const tut = document.querySelector('[data-act="tut-next"].primary:not([disabled])');
+    if (tut) return tut;
+    const layers = ["modal-root", "overlay-root", "app"].map((id) => document.getElementById(id));
+    const scope = layers.find((l) => l && l.innerHTML.trim());
+    if (!scope) return null;
+    const all = [...scope.querySelectorAll(".btn.primary:not([disabled])")].filter((b) => b.offsetParent !== null);
+    return all.find((b) => b.classList.contains("pulse")) || (all.length === 1 ? all[0] : null);
+  };
+  // The mouse wheel scrolls the hand of task cards sideways.
+  document.addEventListener(
+    "wheel",
+    (e) => {
+      const hand = e.target.closest && e.target.closest(".hand, .handfilters");
+      if (!hand || hand.scrollWidth <= hand.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      hand.scrollLeft += e.deltaY;
+      e.preventDefault();
+    },
+    { passive: false }
+  );
 
   App.init = function () {
     R.indexCards();

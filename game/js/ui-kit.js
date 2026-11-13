@@ -211,8 +211,19 @@
       if (el && previewEl && !el.contains(e.relatedTarget)) K.hidePreview();
     });
     document.addEventListener("mousedown", () => K.hidePreview());
+    document.addEventListener("mousemove", (e) => (mouse = { x: e.clientX, y: e.clientY }), { passive: true });
   };
   let inspecting = null;
+  let mouse = null;
+  // After the screen is redrawn the hovered card may be gone or covered: drop a
+  // stale preview, or rebuild it for whatever is under the pointer now.
+  K.refreshPreview = () => {
+    if (!previewEl || previewEl.style.display === "none") return;
+    const under = mouse && document.elementFromPoint(mouse.x, mouse.y);
+    const src = under && under.closest("[data-inspect],[data-art]");
+    K.hidePreview();
+    if (src) src.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+  };
   K.hidePreview = () => {
     if (previewEl) previewEl.style.display = "none";
     if (inspecting && K.uninspect) K.uninspect();
