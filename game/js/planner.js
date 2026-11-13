@@ -289,6 +289,7 @@
   };
   A["as-confirm"] = () => {
     const m = modal();
+    App.checkpoint(`Commit forces to ${TC.ASOS_BY_ID[m.id].name}`);
     const r = E.allocateAsos(App.state, m.team, m.id, m.sel);
     if (!r.ok) return App.notify(r.error);
     App.ui.modal = null;
@@ -298,6 +299,7 @@
   };
   A["as-unmet"] = () => {
     const m = modal();
+    App.checkpoint(`Declare ${TC.ASOS_BY_ID[m.id].name} unmet`);
     const r = E.declareAsosUnmet(App.state, m.team, m.id);
     if (!r.ok) return App.notify(r.error);
     App.ui.modal = null;
@@ -307,11 +309,11 @@
   };
 
   // ================================================================ force management
-  function zoneButtons(act, id, current, extra = "") {
-    return `<div style="display:flex;gap:2px;justify-content:center;margin-top:3px">${TC.ZONES.map((z) => `<button class="btn sm ${current === z ? "primary" : ""}" style="padding:1px 6px;font-size:11px" data-act="${act}" data-id="${id}" data-z="${z}" ${extra}>${z}</button>`).join("")}</div>`;
+  function zoneButtons(act, id, current, extra = "", hint = null) {
+    return `<div style="display:flex;gap:2px;justify-content:center;margin-top:3px">${TC.ZONES.map((z) => `<button class="btn sm ${current === z ? "primary" : ""} ${hint === z ? "hintz" : ""}" ${hint === z ? `title="★ Suggested: request this card for Zone ${z}"` : ""} style="padding:1px 6px;font-size:11px" data-act="${act}" data-id="${id}" data-z="${z}" ${extra}>${z}</button>`).join("")}</div>`;
   }
 
-  function gfmGrid(s, me, act, selected, filter) {
+  function gfmGrid(s, me, act, selected, filter, hints) {
     const plan = s.plans[me];
     const taken = new Map();
     plan.rffNew.forEach((r) => taken.set(r.id, "RFF"));
@@ -328,7 +330,7 @@
           .map((id) => {
             const sel = selected.find((r) => r.id === id);
             const other = !sel && taken.get(id);
-            return `<div style="display:flex;flex-direction:column;align-items:center">${K.capMini(id, s, { big: true, sel: !!sel, disabled: !!other })}${other ? `<span class="muted" style="font-size:10px">${other}</span>` : zoneButtons(act, id, sel && sel.zone)}</div>`;
+            return `<div style="display:flex;flex-direction:column;align-items:center">${K.capMini(id, s, { big: true, sel: !!sel, disabled: !!other })}${other ? `<span class="muted" style="font-size:10px">${other}</span>` : zoneButtons(act, id, sel && sel.zone, "", hints && !sel ? hints.get(id) || null : null)}</div>`;
           })
           .join("");
         return `<div class="g"><div class="gl" style="font-size:11px">${esc(TC.CAPABILITY_TYPES[code] || code)}</div><div class="cards">${cards}</div></div>`;
@@ -348,6 +350,8 @@
     const projected = E.rffProjected(s, me);
     let body = "";
     if (m.tab === "rff") {
+      const hintList = App.rffHints ? App.rffHints(s, me) : [];
+      const hints = new Map(hintList.map((h) => [h.id, h.zone]));
       const cur = E.rffInTheater(s, me);
       const keep = cur.caps
         .map((id) => `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">${K.capMini(id, s, { big: true, ignoreStatus: true, disabled: plan.rffReturn.includes(id) })}<button class="btn sm ${plan.rffReturn.includes(id) ? "danger" : ""}" data-act="ff-return" data-id="${id}">${plan.rffReturn.includes(id) ? "Returning" : "Keep"}</button><span class="faint" style="font-size:10px">Zone ${s.cards[id].zone}</span></div>`)
@@ -356,15 +360,19 @@
       const cmds = E.gfmCommands(s, me)
         .map((id) => {
           const sel = plan.rffNew.some((r) => r.id === id);
-          return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">${K.cmdMini(id, { big: true, sel })}<button class="btn sm ${sel ? "primary" : ""}" data-act="ff-rff-cmd" data-id="${id}">${sel ? "Requested" : "Request"}</button></div>`;
+          const hinted = !sel && hints.has(id);
+          return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">${K.cmdMini(id, { big: true, sel })}<button class="btn sm ${sel ? "primary" : ""} ${hinted ? "hintz" : ""}" data-act="ff-rff-cmd" data-id="${id}" ${hinted ? 'title="★ Suggested: this MSC unlocks task cards you cannot play yet"' : ""}>${sel ? "Requested" : hinted ? "★ Request" : "Request"}</button></div>`;
         })
         .join("");
       body = `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px"><b>RFF forces in theater after tailoring:</b><div class="meter ${projected <= E.RFF_LIMIT ? "ok" : ""}" style="width:220px"><i style="width:${(projected / E.RFF_LIMIT) * 100}%"></i></div><b>${projected} / ${E.RFF_LIMIT}</b>
           <span class="muted" style="font-size:12px">SecWar and RSOI forces do not count${s.settings.commandsCountTowardRff ? "" : "; MSCs do not count (variant)"}.</span></div>
         <div class="banner info">Requested forces arrive during Force Tailoring at the end of this turn, so they are available <b>next</b> turn. SecWar forces redeploy automatically each turn.</div>
         ${keep ? `<h3 style="margin:10px 0 6px">Already in theater via RFF — keep or return</h3><div style="display:flex;gap:10px;flex-wrap:wrap">${keep}</div>` : ""}
+        <div class="banner tip" style="display:flex;gap:12px;align-items:center"><div style="flex:1"><b>How to read a card:</b> the big number is its <b>capability points</b> (what tasks and ASOS requests need). <b>⚔</b> marks a combat unit: it adds deterrence only and cannot fill a requirement. The small number is its deterrence (1/2 means two cards make +1).
+          ${hintList.length ? `<br><b class="gold">★ ${hintList.length} suggested request${hintList.length > 1 ? "s" : ""}</b>: MSCs that unlock task cards, combat units to keep pace with the enemy's deterrence, and support points for your thinnest zone.` : ""}</div>
+          ${hintList.length ? `<button class="btn" data-act="ff-suggest" id="btn-ff-suggest">✨ Request suggested forces</button>` : ""}</div>
         <h3 style="margin:16px 0 6px">GFM major subordinate commands</h3><div style="display:flex;gap:10px;flex-wrap:wrap">${cmds || '<span class="muted">All MSCs are in theater.</span>'}</div>
-        <h3 style="margin:16px 0 6px">GFM capabilities — click a zone to request a card there</h3><div class="grouped flow">${gfmGrid(s, me, "ff-rff", plan.rffNew)}</div>`;
+        <h3 style="margin:16px 0 6px">GFM capabilities — click a zone to request a card there</h3><div class="grouped flow">${gfmGrid(s, me, "ff-rff", plan.rffNew, null, hints)}</div>`;
     } else if (m.tab === "transfers") {
       body = `<div class="banner info">Capabilities move between zones during Force Tailoring at the end of this turn. They still serve this turn's tasks and ASOS in their current zone. SecWar cards redeploy instead of transferring.</div>
         ${TC.ZONES.map((z) => {
@@ -397,6 +405,12 @@
   A["ff-tab"] = (el) => {
     modal().tab = el.dataset.k;
     rerender();
+  };
+  A["ff-suggest"] = () => {
+    const s = App.state;
+    const me = App.me();
+    App.rffHints(s, me).forEach((h) => E.toggleRff(s, me, h.id, h.zone || undefined));
+    ffResult({ ok: true });
   };
   A["ff-rff"] = (el) => ffResult(E.toggleRff(App.state, App.me(), el.dataset.id, el.dataset.z));
   A["ff-rff-cmd"] = (el) => ffResult(E.toggleRff(App.state, App.me(), el.dataset.id));

@@ -61,8 +61,19 @@
   // UI state that belongs to one game and must not leak into the next one
   // (a stale crisis animation could hide the crisis "Next" button).
   function resetGameUi() {
-    Object.assign(App.ui, { screen: "game", modal: null, overlay: null, curtain: null, busy: false, rolling: false, lastPlanner: null, crisisAnim: null, asosConfirmed: false, toasts: [], flashes: {}, snap: null });
+    Object.assign(App.ui, { screen: "game", modal: null, overlay: null, curtain: null, busy: false, rolling: false, lastPlanner: null, crisisAnim: null, asosConfirmed: false, toasts: [], flashes: {}, snap: null, undo: null });
   }
+  // Replace the running campaign with a saved one (file, slot or autosave).
+  App.loadState = function (data) {
+    if (!data || !data.teams || !data.cards) throw new Error("not a TheaterComplex save");
+    R.indexCards();
+    if (TC.tutorial && TC.tutorial.active) TC.tutorial.stop();
+    App.state = data;
+    resetGameUi();
+    App.save();
+    App.render();
+    App.flow();
+  };
 
   // In-game replacements for alert() and confirm().
   App.notify = function (text, title = "Not allowed") {
@@ -132,20 +143,74 @@
   App.render = function () {
     if (App.ui.screen === "game" && App.state) updateFlashes(App.state);
     const root = document.getElementById("app");
-    const handScroll = root.querySelector(".hand")?.scrollLeft;
-    if (App.ui.screen === "title") root.innerHTML = renderTitle();
-    else if (App.ui.screen === "setup") root.innerHTML = renderSetup();
-    else root.innerHTML = renderGame();
+    const oldHand = root.querySelector(".hand");
+    const handScroll = oldHand?.scrollLeft;
+    const oldLog = root.querySelector(".logbox");
+    const focusKey = focusKeyOf(document.activeElement);
+    const html = App.ui.screen === "title" ? renderTitle() : App.ui.screen === "setup" ? renderSetup() : renderGame();
+    const cur = root.firstElementChild;
+    if (App.ui.screen === "game" && cur && cur.classList.contains("game")) {
+      // Same screen as before: swap only the panels whose content changed, so
+      // scroll positions, hover and running animations elsewhere are untouched.
+      const tpl = document.createElement("template");
+      tpl.innerHTML = html;
+      morph(cur, tpl.content.firstElementChild, 3);
+    } else root.innerHTML = html;
     const hand = root.querySelector(".hand");
-    if (hand && handScroll) hand.scrollLeft = handScroll;
+    if (hand && hand !== oldHand && handScroll) hand.scrollLeft = handScroll;
     const log = root.querySelector(".logbox");
-    if (log) log.scrollTop = log.scrollHeight;
+    if (log && log !== oldLog) log.scrollTop = log.scrollHeight;
     renderOverlay();
     renderModal();
     renderToasts();
+    makeReachable();
+    restoreFocus(focusKey);
     K.refreshPreview && K.refreshPreview();
     TC.tutorial && TC.tutorial.update();
+    App.afterRender && App.afterRender();
+    App.checkTips && App.checkTips();
   };
+
+  // Replace `oldEl` with `newEl`, descending up to `depth` levels to find the
+  // smallest changed panels.
+  function morph(oldEl, newEl, depth) {
+    if (oldEl.isEqualNode(newEl)) return;
+    const n = oldEl.childElementCount;
+    const plain = (el) => ![...el.childNodes].some((c) => c.nodeType === 3 && c.nodeValue.trim());
+    if (depth > 0 && n > 0 && n === newEl.childElementCount && plain(oldEl) && plain(newEl) && oldEl.cloneNode(false).isEqualNode(newEl.cloneNode(false))) {
+      const a = [...oldEl.children];
+      const b = [...newEl.children];
+      a.forEach((c, i) => morph(c, b[i], depth - 1));
+      return;
+    }
+    oldEl.replaceWith(newEl);
+  }
+
+  // Keyboard: every clickable thing can be reached with Tab, and focus is put
+  // back on the same control after the screen is redrawn.
+  function makeReachable() {
+    document.querySelectorAll("[data-act]:not(button):not(a):not(input):not(label):not([tabindex]), [data-inspect]:not([tabindex])").forEach((el) => {
+      if (el.dataset.act === "veil" || el.dataset.act === "toast-x") return;
+      el.tabIndex = 0;
+      if (el.dataset.act) el.setAttribute("role", "button");
+    });
+  }
+  function focusKeyOf(el) {
+    if (!App.ui.kbd || !el || el === document.body || !el.dataset) return null;
+    const d = el.dataset;
+    return el.id ? { id: el.id } : d.act || d.inspect ? { data: JSON.stringify(Object.assign({}, d)) } : null;
+  }
+  function restoreFocus(key) {
+    if (!App.ui.kbd) return;
+    const layer = document.querySelector("#modal-root .modal") || document.querySelector("#overlay-root .veil > *");
+    const act = document.activeElement;
+    if (act && act !== document.body && document.contains(act) && (!layer || layer.contains(act))) return;
+    let el = null;
+    if (key && key.id) el = document.getElementById(key.id);
+    else if (key) el = [...document.querySelectorAll("[data-act], [data-inspect]")].find((x) => JSON.stringify(Object.assign({}, x.dataset)) === key.data);
+    if (layer && (!el || !layer.contains(el))) el = layer.querySelector(".btn.primary:not([disabled])") || layer.querySelector("button:not([disabled]), [tabindex]");
+    if (el && el.offsetParent !== null) el.focus({ preventScroll: true });
+  }
 
   function renderToasts() {
     const el = document.getElementById("toast-root");
@@ -155,7 +220,11 @@
     // A message about an earlier phase is stale once the game has moved on.
     const st = App.ui.screen === "game" ? App.state : null;
     if (st) App.ui.toasts = App.ui.toasts.filter((t) => !t.phase || (st.phase !== "gameOver" && t.phase === st.phase && t.turn === st.turn));
-    el.innerHTML = `<div class="toast-wrap ${covered ? "low" : ""}">${App.ui.toasts.map((t) => `<div class="toast ${t.team ? K.teamCls(t.team) : ""}" data-act="toast-x" data-id="${t.id}" title="Click to dismiss">${t.html}</div>`).join("")}</div>`;
+    const side = !covered && document.querySelector(".game aside.side");
+    const r = side && side.getBoundingClientRect();
+    const docked = r && r.left > 500 && r.width >= 240; // the side panel is a right-hand column
+    const pos = docked ? ` style="left:${Math.round(r.left + 8)}px;width:${Math.round(r.width - 16)}px;bottom:${Math.round(window.innerHeight - r.bottom + 8)}px"` : "";
+    el.innerHTML = `<div class="toast-wrap ${covered ? "low" : ""} ${docked ? "inlog" : ""}"${pos}>${App.ui.toasts.map((t) => `<div class="toast ${t.team ? K.teamCls(t.team) : ""}" data-act="toast-x" data-id="${t.id}" title="Click to dismiss">${t.html}</div>`).join("")}</div>`;
   }
 
   function renderModal() {
@@ -195,7 +264,8 @@
       <div class="btn-row" style="justify-content:center;margin-top:18px">
         ${save && save.phase !== "gameOver" ? `<button class="btn primary" data-act="continue">Continue campaign — Turn ${save.turn}, ${E.PHASES.find((p) => p.key === save.phase)?.label || ""}</button>` : ""}
         <button class="btn ghost" data-act="import">Load save file…</button>
-        <a class="btn ghost" href="../index.html">Open free-form tabletop</a>
+        ${App.hasSlots && App.hasSlots() ? '<button class="btn ghost" data-act="saves">Saved campaigns…</button>' : ""}
+        <a class="btn ghost" id="tabletop-link" href="../index.html" hidden>Open free-form tabletop</a>
       </div>
     </div></div>`;
   }
@@ -214,12 +284,12 @@
         <div>
           <div class="field"><label>Commanders</label>
             ${seg("mode", [["ai4", "You: Fourth Army vs AI"], ["ai10", "You: Tenth Army vs AI"], ["hotseat", "Two players (hot-seat)"], ["aiai", "Watch AI vs AI"]], s.mode, "root")}
-            <div class="hint">Hot-seat keeps each staff's plan hidden behind a hand-off screen during planning.</div></div>
+            <div class="hint">Fourth Army starts strong in Zone A and Tenth Army in Zone C; the central Zone B usually decides the campaign. Hot-seat keeps each staff's plan hidden behind a hand-off screen during planning.</div></div>
           <div class="field"><label>Campaign length (turns = years)</label>${seg("turns", [[4, "4"], [6, "6"], [8, "8"], [10, "10"]], s.settings.turns)}
             <div class="hint">The tabletop game runs for a set time (typically 4 hours). The turn track goes to 10.</div></div>
           <div class="field"><label>Planning timer</label>${seg("planTimerMinutes", [[0, "Off"], [10, "10 min"], [20, "20 min"], [30, "30 min (rules)"]], s.settings.planTimerMinutes)}</div>
           ${s.mode !== "hotseat" ? `<div class="field"><label>AI opponent</label>${seg("aiLevel", Object.entries(AI.LEVELS).map(([k, l]) => [k, l.label]), s.settings.aiLevel)}
-            <div class="hint">${{ easy: "Recruit plans fewer tasks and makes loose choices. Best for your first campaign.", normal: "Regular plays a full, sensible campaign.", hard: "Aggressive plays like Regular but turns tasks against you with Disruption." }[s.settings.aiLevel] || ""}</div></div>` : ""}
+            <div class="hint">${{ easy: "Recruit plans fewer tasks and makes loose choices. Best for your first campaign.", normal: "Regular plays a full, sensible campaign.", hard: "Aggressive is the strongest opponent: it plays like Regular and also turns tasks against you with Disruption." }[s.settings.aiLevel] || ""}</div></div>` : ""}
           <div class="field"><label>AI pace</label>${seg("aiSpeed", [[2, "Deliberate"], [1, "Normal"], [0.4, "Fast"]], s.settings.aiSpeed)}</div>
           <div class="field"><label>Seed (optional)</label><input type="text" data-act="setup-seed" value="${esc(s.seed)}" placeholder="random"><div class="hint">Same seed = same dice and draws, for exercises and after-action review.</div></div>
         </div>
@@ -245,8 +315,9 @@
   // ---------------------------------------------------------------- game screen
   function renderGame() {
     const s = App.state;
-    return `<div class="screen game">${renderHud(s)}<div class="main"><div class="board">${TC.ZONES.map((z) => renderZone(s, z)).join("")}</div>
-      <aside class="side">${renderAdvisor(s)}${renderLog(s)}</aside></div>${renderDock(s)}</div>`;
+    return `<div class="screen game ${App.ui.dockMin ? "dockmin" : ""}">${renderHud(s)}<div class="main"><div class="board">${TC.ZONES.map((z) => renderZone(s, z)).join("")}</div>
+      <aside class="side">${renderAdvisor(s)}${renderLog(s)}</aside>
+      <button class="docktoggle" data-act="dock-toggle" title="${App.ui.dockMin ? "Show the bottom bar again" : "Hide the bottom bar to see the whole board"}">${App.ui.dockMin ? "▴ Show bottom bar" : "▾ Hide bottom bar"}</button></div>${renderDock(s)}</div>`;
   }
 
   function renderHud(s) {
@@ -260,7 +331,7 @@
     const side = (team) => {
       const t = s.teams[team];
       const you = App.humans().length === 1 && App.isHuman(team) ? '<span class="you">YOU</span>' : App.state.controllers[team] === "ai" ? '<span class="you" style="color:var(--muted)">AI</span>' : "";
-      return `<div class="side ${K.teamCls(team)}"><span class="name"><span class="marker ${TC.TEAM_INFO[team].marker}"></span> <span class="lf">${TC.TEAM_INFO[team].name}</span><span class="ls">${TC.TEAM_INFO[team].short}</span> ${you}</span>
+      return `<div class="side ${K.teamCls(team)}" data-act="score" title="${esc(App.scoreTip ? App.scoreTip(s, team) : "")}"><span class="name"><span class="marker ${TC.TEAM_INFO[team].marker}"></span> <span class="lf">${TC.TEAM_INFO[team].name}</span><span class="ls">${TC.TEAM_INFO[team].short}</span> ${you}</span>
         <span class="pts${fx(team + ".score").cls}"${fx(team + ".score").style}>${t.score}<small>pts</small>${fx(team + ".score").html}</span><span class="inf${fx(team + ".influence").cls}"${fx(team + ".influence").style} title="Theater-wide Influence (higher earns +1 point each turn)">◆ ${t.influence} infl.${fx(team + ".influence").html}</span></div>`;
     };
     return `<header class="hud">
@@ -271,6 +342,7 @@
       <span class="spacer"></span>
       ${s.taskLimit ? `<span class="chip" title="Adjudicator's d6 roll (minimum 3)">Task limit ${s.taskLimit}</span>` : ""}
       <div class="scorebox">${side("fourth")}${side("tenth")}</div>
+      <button class="btn sm ghost" data-act="glossary" title="Glossary: what ASOS, RFF, MSC, LSCO and the other abbreviations mean">Aa <span class="lf">Glossary</span></button>
       <button class="btn sm ghost" data-act="codex" title="Rules Codex">📖 <span class="lf">Rules</span></button>
       <button class="btn sm ghost" data-act="menu" title="Menu">☰</button>
     </header>`;
@@ -491,7 +563,7 @@
         break;
     }
     const move = yourMove(s, me);
-    return `<div class="advisor"><div class="who"><div class="avatar">S3</div><div><h4>${esc(title)}</h4><div class="role">Operations officer · advising ${App.humans().length ? esc(name) : "observers"}</div></div></div>${move ? `<div class="yourmove ${move.wait ? "wait" : ""}" id="yourmove"><span class="k">${move.wait ? "⏳ Please wait" : "▶ Your move"}</span>${move.wait || move}</div>` : ""}<div class="msg">${body}</div></div>`;
+    return `<div class="advisor"><div class="who"><div class="avatar">S3</div><div><h4>${esc(title)}</h4><div class="role">Operations officer · advising ${App.humans().length ? esc(name) : "observers"}</div></div></div>${move ? `<div class="yourmove ${move.wait ? "wait" : ""}" id="yourmove"><span class="k">${move.wait ? "⏳ Please wait" : "▶ Your move"}</span>${move.wait || move}</div>` : ""}${App.canUndo && App.canUndo() ? `<button class="btn sm undo" data-act="undo" id="btn-undo" title="Take back your last commitment (Ctrl+Z). Available until the next dice roll.">↶ Undo: ${esc(App.ui.undo.label)}</button>` : ""}<div class="msg">${body}</div></div>`;
   }
 
   function renderLog(s) {
@@ -670,12 +742,14 @@
       const cost = Object.entries(task.cost)
         .map(([k, v]) => `<span class="tcost">${k === "influence" ? "◆" : "Acc"}−${v}</span>`)
         .join("");
+      const blocked = !anyOk && !planned && plan.tasks.length < s.taskLimit && App.blockReason ? App.blockReason(s, me, task) : null;
+      const why = blocked ? `<span class="twhy" title="${esc(blocked.all)}">${esc(blocked.text)}</span>` : "";
       const star = tip ? `<span class="sugg" title="${tip.rank === 0 ? "Top suggestion" : "Suggested"}: a strong pick in Zone ${tip.zone} right now">★ ${tip.zone}</span>` : "";
       return `<div class="taskcard tc2 ${planned ? "planned" : ""} ${!anyOk && !planned ? "blocked" : ""} ${tip ? "suggested" : ""}" data-act="task-open" data-num="${task.num}" ${tip ? `data-z="${tip.zone}"` : ""} data-inspect="plan" data-team="${me}" data-art="${task.art[me].front}">${star}
         <img src="${task.art[me].front}" alt="" loading="lazy">
         <div class="tinfo"><div class="tname"><b>${task.num}</b> ${esc(task.name)}${task.mode !== "N" ? ` <span class="tmode">${task.mode}</span>` : ""}</div>
           <div class="teff">${effectSummary(task)}</div>
-          <div class="tfoot">${dots}${cost}</div></div></div>`;
+          <div class="tfoot">${why || dots}${cost}</div></div></div>`;
     }).join("");
     const filters = [["all", "All"], ["suggested", "★ Suggested"], ["ready", "Plannable now"], ["intel", "Intel"], ["comms", "Comms"], ["protection", "Protection"], ["partnerCap", "Partner Cap"], ["infrastructure", "Infra"], ["interop", "Interop"], ["stockage", "Stockage"], ["assurance", "Assurance"], ["influence", "Influence"], ["access", "Access"]]
       .map(([k, l]) => `<button class="btn sm ${filter === k ? "on" : ""}" data-act="hand-filter" data-k="${k}">${l}</button>`)
@@ -880,7 +954,7 @@
       return `<div class="modal" style="width:min(980px,94vw)"><div class="modal-head"><h2>Force Tailoring — Turn ${s.turn}</h2></div>
         <div class="modal-body">${yearReview(s)}<h3 class="yrtitle">Forces on the move</h3><div class="trays" style="margin-top:0">${col("fourth")}${col("tenth")}</div>
         <div class="banner info" style="margin-top:14px">Cleanup: sideways cards return upright, deterrence is recounted${even ? ", and <b>Assurance and Partner Interoperability drop by 1</b> in every zone (even turn)" : ""}.</div></div>
-        <div class="modal-foot"><button class="btn primary lg" data-act="cleanup" id="btn-continue">${s.turn >= s.settings.turns ? "Final results" : `Begin turn ${s.turn + 1}`} →</button></div></div>`;
+        <div class="modal-foot"><button class="btn ghost left" data-act="export" title="The campaign autosaves in this browser only. A save file is a copy you can keep or send.">💾 Download save file</button><button class="btn primary lg" data-act="cleanup" id="btn-continue">${s.turn >= s.settings.turns ? "Final results" : `Begin turn ${s.turn + 1}`} →</button></div></div>`;
     },
     gameOver() {
       const s = App.state;
@@ -906,12 +980,13 @@
       const rows = hist
         .map((h) => `<tr><td>${h.turn}</td>${h.crisis.map((c) => `<td><span class="chip ct-${c.type}" style="color:#fff;border:0">${c.type}</span> ${c.winner ? `<span class="${c.winner === "fourth" ? "c4" : "c10"}">${TC.TEAM_INFO[c.winner].short}</span>` : "tie"}</td>`).join("")}<td>${h.score.fourth}–${h.score.tenth}</td></tr>`)
         .join("");
-      return `<div class="stage" style="max-width:1000px"><div class="kicker">After-action review</div><h1>${w ? TC.TEAM_INFO[w].name.toUpperCase() + " WINS" : "DRAW"}</h1>
+      return `<div class="stage endstage" style="max-width:1000px"><div class="kicker">After-action review</div><h1>${w ? TC.TEAM_INFO[w].name.toUpperCase() + " WINS" : "DRAW"}</h1>
         <p style="font-size:20px"><b class="c4">${s.teams.fourth.score}</b> — <b class="c10">${s.teams.tenth.score}</b></p>
         <div class="endgrid"><div><div class="chartlegend"><span class="c4">● Fourth Army</span><span class="c10">● Tenth Army</span><span class="muted">score after each turn</span></div><svg class="chart" viewBox="0 0 ${W} ${H}">${grid}<line x1="30" x2="${W - 30}" y1="${y(0)}" y2="${y(0)}" stroke="#3a4651"/>${line("fourth", "#5aa2ff")}${line("tenth", "#ff9f5a")}
           ${hist.map((h, i) => `<text x="${x(i + 1)}" y="${H - 4}" fill="#93a1ad" font-size="11" text-anchor="middle">T${h.turn}</text>`).join("")}</svg>
           </div><div><table class="hist"><tr><th>Turn</th><th>Zone A</th><th>Zone B</th><th>Zone C</th><th>Score</th></tr>${rows}</table>${K.crisisLegend()}</div></div>
-        <div class="btn-row" style="justify-content:center;margin-top:20px"><button class="btn" data-act="title">Main menu</button><button class="btn primary lg" data-act="setup">New campaign</button></div></div>`;
+        ${TC.endAnalysis ? TC.endAnalysis(s) : ""}
+        <div class="btn-row" style="justify-content:center;margin-top:20px"><button class="btn" data-act="title">Main menu</button><button class="btn" data-act="score">Score breakdown</button><button class="btn" data-act="export">💾 Download save file</button><button class="btn primary lg" data-act="setup">New campaign</button></div></div>`;
     },
     menu() {
       return `<div class="modal narrow"><div class="modal-head"><h2>Menu</h2><button class="btn ghost x" data-act="overlay-close">✕</button></div>
@@ -919,9 +994,13 @@
           <button class="btn" data-act="codex">📖 Rules Codex</button>
           <button class="btn" data-act="export">💾 Download save file</button>
           <button class="btn" data-act="import">📂 Load save file</button>
+          ${App.state.tutorial ? "" : '<button class="btn" data-act="saves">🗂 Saved campaigns (slots)</button>'}
+          <button class="btn" data-act="sound-toggle">${App.soundOn() ? "🔊 Sound: on" : "🔇 Sound: off"}</button>
+          <button class="btn" data-act="tips-toggle">💡 First-time tips: ${App.tipsOn() ? "on" : "off"}</button>
+          <button class="btn" data-act="marks-toggle" title="Adds arrows and shapes so nothing depends on telling red from green or blue from orange">◐ Colour-blind marks: ${App.marksOn() ? "on" : "off"}</button>
           ${App.state.tutorial ? '<button class="btn" data-act="tutorial-exit">Leave tutorial</button>' : ""}
           <button class="btn danger" data-act="title">Quit to main menu (autosaved)</button></div>
-          <p class="muted" style="font-size:12px;margin-top:12px">Seed ${App.state.seed} · Campaign autosaves in this browser after every action.</p></div></div>`;
+          <p class="muted" style="font-size:12px;margin-top:12px">Seed ${App.state.seed} · Campaign autosaves in this browser after every action. Clearing the browser's data erases it, so download a save file if the campaign matters.</p></div></div>`;
     },
   };
 
@@ -996,7 +1075,7 @@
           App.ui.busy = true;
           await pace(900);
           App.ui.busy = false;
-          if (App.state !== s) return;
+          if (App.state !== s) return App.flow(); // e.g. the player used Undo meanwhile
           const res = AI.takeInitiative(s, s.impl.active);
           if (res) taskToast(res);
           App.save();
@@ -1028,6 +1107,7 @@
     App.ui.rolling = true;
     App.ui.busy = true;
     App.render();
+    App.sfx && App.sfx("roll");
     const s = App.state;
     await K.sleep(900);
     App.ui.rolling = false;
@@ -1053,6 +1133,7 @@
     App.ui.busy = true;
     App.ui.overlay = { type: "initiative", rolling: true };
     App.render();
+    App.sfx && App.sfx("roll");
     await K.sleep(1000);
     App.ui.busy = false;
     if (App.state !== s) return;
@@ -1078,6 +1159,10 @@
     if (!res || res.ok === undefined) return;
     const task = TC.taskByNum(res.num);
     const team = res.team;
+    if (App.sfx) {
+      const mine = App.isHuman(team) || !App.humans().length;
+      App.sfx(!res.ok ? "bad" : res.disrupt && !mine ? "bad" : mine ? "good" : "plan");
+    }
     const changes = res.changes.map((c) => `${TC.EFFECT_LABELS[c.key]} ${c.before}→${c.after}${c.team !== team ? " (enemy)" : ""}`).join(", ");
     const rolls = res.rolls.map((r) => `${R.cmd(r.command).short}: d6 ${r.roll} (need ${r.need}+)`).join("; ");
     App.toast(
@@ -1092,6 +1177,7 @@
     const even = s.turn % 2 === 0;
     E.cleanup(s);
     App.ui.lastPlanner = null;
+    if (s.phase === "gameOver" && App.sfx) App.sfx("fanfare");
     if (even && s.phase !== "gameOver") App.toast("<div class='t'><b>Even turn</b><br>Assurance and Partner Interoperability degraded by 1 in every zone.</div>", null);
     App.save();
     App.render();
@@ -1119,6 +1205,10 @@
   }
 
   // ---------------------------------------------------------------- actions
+  const taskName = (el) => {
+    const t = App.state.plans[App.state.impl.active].tasks.find((x) => x.uid === Number(el.dataset.uid));
+    return t ? TC.taskByNum(t.num).name : "task";
+  };
   const actions = {
     title() {
       App.ui.screen = "title";
@@ -1175,33 +1265,34 @@
       App.ui.overlay = null;
       App.openModal({ type: "codex", tab: App.ui.codexTab || "overview" });
     },
+    "dock-toggle"() {
+      App.ui.dockMin = !App.ui.dockMin;
+      App.render();
+    },
+    glossary() {
+      App.ui.overlay = null;
+      App.openModal({ type: "codex", tab: "glossary" });
+    },
     menu() {
       App.ui.overlay = { type: "menu" };
       App.render();
     },
     export() {
-      const blob = new Blob([JSON.stringify(App.state, null, 1)], { type: "application/json" });
+      const blob = new Blob([App.encodeSave(App.state)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = `theatercomplex-turn${App.state.turn}-${App.state.phase}.json`;
+      App.ui.exported = true;
       a.click();
       URL.revokeObjectURL(a.href);
     },
     import() {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = ".json,application/json";
+      input.accept = ".json,.tcsave,application/json";
       input.onchange = async () => {
         try {
-          const data = JSON.parse(await input.files[0].text());
-          if (!data.teams || !data.cards) throw new Error("not a TheaterComplex save");
-          R.indexCards();
-          App.state = data;
-          if (TC.tutorial && TC.tutorial.active) TC.tutorial.stop();
-          resetGameUi();
-          App.save();
-          App.render();
-          App.flow();
+          App.loadState(App.decodeSave(await input.files[0].text()));
         } catch (e) {
           App.notify("Could not load that file: " + e.message, "Load failed");
         }
@@ -1242,11 +1333,12 @@
       const s = App.state;
       const me = App.me();
       const before = new Set(s.plans[me].tasks.map((t) => t.uid));
-      AI.planTasks(s, me, { noise: 0, limit: s.taskLimit });
+      AI.planTasks(s, me, { noise: 0, limit: s.taskLimit, advisor: true });
       const added = s.plans[me].tasks.filter((t) => !before.has(t.uid));
       App.save();
       App.render();
-      if (!added.length) return App.notify("No more tasks fit right now without over-tasking an MSC.", "Nothing to add");
+      if (!added.length) return App.notify(App.whyNotMore(s, me), "Nothing to add");
+      if (s.plans[me].tasks.length < s.taskLimit) App.notify(App.whyNotMore(s, me), `${s.taskLimit - s.plans[me].tasks.length} slot${s.taskLimit - s.plans[me].tasks.length > 1 ? "s" : ""} still empty`);
       App.toast(`<div class="t"><b>${added.length} task${added.length > 1 ? "s" : ""} added</b><br>${added.map((t) => `${esc(TC.taskByNum(t.num).name)} (Zone ${t.zone})`).join("<br>")}<br><span class="muted">Click a task in your campaign list to change or remove it.</span></div>`, me, 6000);
     },
     "task-edit"(el, e) {
@@ -1285,6 +1377,7 @@
       App.flow();
     },
     exec(el) {
+      App.checkpoint(`Execute ${taskName(el)}`);
       const r = E.executeTask(App.state, App.state.impl.active, Number(el.dataset.uid), { disrupt: false });
       taskToast(r);
       App.save();
@@ -1292,6 +1385,7 @@
       App.flow();
     },
     "exec-disrupt"(el) {
+      App.checkpoint(`Disruption with ${taskName(el)}`);
       const r = E.executeTask(App.state, App.state.impl.active, Number(el.dataset.uid), { disrupt: true });
       taskToast(r);
       App.save();
@@ -1304,9 +1398,11 @@
         return App.confirm({ title: "Stand this task down?", body: `${t ? TC.taskByNum(t.num).name : "This task"} will not be executed this year. Its Influence and Access costs are refunded, but it has no effect.`, yes: "Stand down", act: "standdown", uid: el.dataset.uid });
       }
       App.ui.modal = null;
+      App.checkpoint(`Stand down ${taskName(el)}`);
       App.do(() => E.standDownTask(App.state, App.state.impl.active, Number(el.dataset.uid)));
     },
     spend(el) {
+      App.checkpoint(`Spend Influence in Zone ${el.dataset.z}`);
       const r = E.spendInfluence(App.state, App.state.impl.active, el.dataset.z);
       if (!r.ok) App.notify(r.error);
       App.save();
@@ -1349,9 +1445,29 @@
     if (fn) fn(el, e);
   });
   document.addEventListener("keydown", (e) => {
+    if (["Tab", "Enter", " ", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) App.ui.kbd = true;
     if (e.key === "Escape" && App.ui.modal) return App.closeModal();
+    if (e.key === "Escape") return K.hidePreview();
+    const t = e.target;
+    // A focused card, chip or zone acts like a button.
+    if ((e.key === "Enter" || e.key === " ") && t.getAttribute && t.getAttribute("role") === "button" && !e.repeat) {
+      e.preventDefault();
+      return t.click();
+    }
+    // Arrow keys walk along a row of cards.
+    if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && t.parentElement && t.parentElement.classList.contains("hand")) {
+      let sib = t;
+      do sib = e.key === "ArrowRight" ? sib.nextElementSibling : sib.previousElementSibling;
+      while (sib && sib.tabIndex < 0 && !sib.querySelector("[tabindex]"));
+      const target = sib && (sib.tabIndex >= 0 ? sib : sib.querySelector("[tabindex]"));
+      if (target) {
+        e.preventDefault();
+        target.focus();
+      }
+      return;
+    }
     if (e.key !== "Enter" || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
-    if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(e.target.tagName)) return;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(t.tagName)) return;
     const btn = App.primaryButton();
     if (btn) {
       e.preventDefault();
@@ -1369,6 +1485,15 @@
     const all = [...scope.querySelectorAll(".btn.primary:not([disabled])")].filter((b) => b.offsetParent !== null);
     return all.find((b) => b.classList.contains("pulse")) || (all.length === 1 ? all[0] : null);
   };
+  document.addEventListener("mousedown", () => (App.ui.kbd = false), true);
+  // Keyboard focus on a card shows the same preview a mouse hover does.
+  document.addEventListener("focusin", (e) => {
+    if (!App.ui.kbd || !e.target.closest) return;
+    const src = e.target.closest("[data-inspect],[data-art]");
+    if (src) src.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    else K.hidePreview();
+  });
+  window.addEventListener("resize", () => App.ui.screen === "game" && renderToasts());
   // The mouse wheel scrolls the hand of task cards sideways.
   document.addEventListener(
     "wheel",

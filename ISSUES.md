@@ -1,39 +1,54 @@
-# TheaterComplex digital game: open issues and ideas
+# TheaterComplex digital game: issues and status
 
-Things that would improve the game but are not done yet, most valuable first in each group.
-Sizes are rough: S = under an hour, M = a few hours, L = a day or more.
+The 23 issues from the last review, with what was done about each. "Done" means built and
+checked in a browser; "Partly" means it is better but the original problem is not fully gone.
 
 ## Balance and rules
 
-1. **Fourth Army wins about twice as often as Tenth Army.** Over 200 AI-vs-AI games the split is Fourth 131, Tenth 64, draws 5. Find out whether this comes from the starting trackers, the starting forces, or the AI playing Tenth badly, then either fix it or tell players up front which side is the harder one. (L)
-2. **"Aggressive" AI is barely stronger than "Regular"** (63 wins to 52 in 120 games). There is no truly hard opponent yet. A stronger AI would need to look ahead at the crisis odds per zone rather than score each task on its own. (L)
-3. **"Suggest a plan" sometimes leaves slots empty** (for example 4 of 6 filled) without saying why. Tell the player what is short: staff, a command, or capability points in the zone. (S)
-4. **Scores can go negative** (over-tasking penalties) with no explanation next to the number. A hover breakdown of where each army's points came from would help. (M)
+| # | Issue | Status | What changed |
+|---|---|---|---|
+| 1 | Fourth Army won about twice as often as Tenth (131 to 64) | Done | The cause was the AI, not the rules: Tenth's AI spent its tasks on Zone A, which it cannot take. Regular and Aggressive now weigh how contested a zone is. 200 AI campaigns: Fourth 101, Tenth 91, draws 8. A test fails if one side passes 60%. |
+| 2 | No truly hard opponent | Partly | Aggressive now beats Regular 68 to 47 over 120 games (it was 63 to 52 against a weaker Regular). It still plans one year at a time; it does not look ahead. |
+| 3 | "Suggest a plan" left slots empty without saying why | Done | It now says what the remaining cards are short of: staff, an MSC, capability points, Assurance or cost. |
+| 4 | Negative scores with no explanation | Done | Click either score for a breakdown by source and by turn. |
 
 ## Beginner clarity
 
-5. **Blocked cards do not say why at a glance.** A striped card needs a hover to learn what is missing. Put a short reason on the card itself, such as "needs SIG staff". (M)
-6. **The crisis screen assumes you know the dice rules.** Add a one-line plain-English verdict for the human player, such as "You lost Zone B by 2: their Protection re-roll cost you 2". (M)
-7. **Force Management is the hardest screen to read.** Cards with a value of 0 look broken, and nothing says which requests would help the plan. Add suggested requests, like the star on task cards. (M)
-8. **No undo.** Committing ASOS forces and executing a task are final. A one-step undo before the next dice roll would forgive misclicks. (M)
-9. **The tutorial only covers turn 1.** Even-turn decay, RFF arrivals and Disruption are first met without guidance. Add short first-time tips when each one first happens. (M)
-10. **Jargon stays in the top bar** (ASOS, RFF, MSC, LSCO). The tooltips explain them, but a small glossary button would be easier to find. (S)
+| # | Issue | Status | What changed |
+|---|---|---|---|
+| 5 | Blocked cards did not say why | Done | A blocked card shows its reason on the card, for example "needs SUST in zone". |
+| 6 | Crisis screen assumed you know the dice rules | Done | Each zone ends with a one-line verdict: who won, by how much, and what decided it. |
+| 7 | Force Management hard to read | Done | Combat units show ⚔ instead of 0, a line explains the numbers, suggested requests are starred, and one button requests them all. |
+| 8 | No undo | Done | Undo button and Ctrl+Z take back the last commitment (ASOS, execute, Disruption, stand down, Influence) until a die is rolled or the phase ends. |
+| 9 | Tutorial only covered turn 1 | Done | A short tip appears the first time you meet even-turn decay, Disruption (yours and the enemy's), a violent crisis, over-tasking and RFF arrivals. Can be turned off. |
+| 10 | Jargon in the top bar | Done | "Aa Glossary" button in the top bar opens the glossary directly. |
 
 ## Interface
 
-11. **Messages cover the top of Zone C.** They are now smaller, capped at three, and click to dismiss, but they still sit on the board. A dedicated strip above the bottom bar would never cover anything. (M)
-12. **The bottom bar is crowded on a 1366x768 laptop.** Only about five task cards fit, and the zone dice at the bottom of each board are hidden until you scroll. A collapsible bottom bar or a compact card size would help. (M)
-13. **Not usable on a phone or small tablet.** The layout stacks below a certain width, but hover-only features (card inspector, tooltips) have no touch equivalent. (L)
-14. **No sound and few animations.** Dice rolls and scoring would feel better with short sounds and a mute switch. (M)
-15. **Colour alone marks the two armies and good/bad changes.** Add shapes or labels for colour-blind players. (M)
-16. **Keyboard support is partial.** Enter presses the highlighted button and Esc closes dialogs, but cards and zones cannot be reached with Tab. (M)
-17. **The end screen is thin.** It shows the score chart and crisis history but no "what decided the game" summary or per-zone statistics. (M)
+| # | Issue | Status | What changed |
+|---|---|---|---|
+| 11 | Messages covered Zone C | Done | Messages now sit over the adjudicator log in the side panel, which records the same events. |
+| 12 | Bottom bar crowded on a 1366x768 laptop | Partly | Cards are narrower so six fit, and a "Hide bottom bar" tab shows the whole board. The bar is still dense. |
+| 13 | Not usable on a phone or tablet | Partly | A full turn can be played by touch at phone and tablet size: the board scrolls, the bottom bar stays put, first tap on a card explains it and the second opens it, tapping a label shows its tooltip. Layout is functional, not polished, and Force Management is cramped on a phone. |
+| 14 | No sound, few animations | Partly | Short synthesised sounds for dice, task results, zone wins and losses and the final result, with a switch in the menu. No new animations. |
+| 15 | Colour alone marked armies and good/bad | Done | "Colour-blind marks" in the menu adds arrows and shapes to every colour cue. |
+| 16 | Keyboard support partial | Done | Tab reaches every card, chip and button; Enter or Space activates; arrow keys walk the cards; focus shows the same preview as hover and survives redraws. |
+| 17 | End screen thin | Done | Adds "What decided the campaign" and a per-zone table of wins and points, plus buttons for the score breakdown and a save file. |
 
 ## Technical
 
-18. **Fonts load from Google**, so the look changes when offline. Bundle the two fonts in the game folder. (S)
-19. **"Open free-form tabletop" breaks when only the `game` folder is shared.** Hide the link when the page is not there. (S)
-20. **One save slot, stored per browser.** Clearing browser data loses the campaign. Add named slots and a reminder to download a save file. (M)
-21. **No browser-level tests in the repository.** The rules have 20 automated tests, but the screens are only checked by throwaway scripts. Keep a small scripted play-through in `game/tests`. (M)
-22. **The whole screen is redrawn on every change.** It is fast enough today, but it resets scroll positions and hover state, which has caused bugs (for example the stuck card preview). Redrawing only the changed panels would remove that class of bug. (L)
-23. **Hot-seat secrecy relies on players looking away.** The plan is hidden behind the hand-off screen, but a saved file contains both plans in plain text. (S)
+| # | Issue | Status | What changed |
+|---|---|---|---|
+| 18 | Fonts loaded from Google | Done | Both fonts are in `game/fonts` (SIL Open Font License). The game makes no network requests. |
+| 19 | Tabletop link broke when only `game` was shared | Done | The link only appears when the tabletop is really there. |
+| 20 | One save slot per browser | Done | Six named slots (menu and title screen), plus reminders to download a save file. |
+| 21 | No browser tests in the repository | Done | `game/tests/playthrough.py` plays a campaign in each mode in a headless browser. |
+| 22 | Whole screen redrawn on every change | Done | Only panels whose content changed are replaced, so scroll, hover and focus elsewhere are kept. Each panel is still rebuilt as text first. |
+| 23 | Hot-seat save file showed both plans | Partly | A hot-seat save made during planning is scrambled so it cannot be read in a text editor. It is not encryption: someone determined can decode it. |
+
+## Still open
+
+- A look-ahead AI for a real "hard" level (issue 2).
+- A cleaner small-screen layout, especially Force Management on a phone (issues 12 and 13).
+- Animations for scoring and force movements (issue 14).
+- The rules questions in [docs/rules-verification.md](docs/rules-verification.md) still need an answer from the game's designers.

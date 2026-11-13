@@ -186,6 +186,21 @@ test(`${games} full AI-vs-AI campaigns complete with invariants intact`, () => {
     });
   }
 });
+test("neither army is favoured when both are played by the Regular AI", () => {
+  if (games < 100) return; // too few games to tell
+  const decided = tally.fourth + tally.tenth;
+  const share = Math.max(tally.fourth, tally.tenth) / decided;
+  assert.ok(share < 0.6, `one army wins ${Math.round(share * 100)}% of decided games: ${JSON.stringify(tally)}`);
+});
+test("zone win chance is a probability and moves with the trackers", () => {
+  const s = E.newGame({ seed: 3 });
+  const before = AI.winChance(s, "fourth", "B");
+  assert.ok(before > 0 && before < 1);
+  s.teams.fourth.zones.B.infrastructure = 7;
+  s.teams.fourth.zones.B.partnerCap = 7;
+  assert.ok(AI.winChance(s, "fourth", "B") > before, "more and bigger dice must raise the chance");
+  assert.ok(Math.abs(AI.winChance(s, "fourth", "B") + AI.winChance(s, "tenth", "B") - 1) < 1e-9);
+});
 test("same seed replays identically", () => {
   const a = playGame(42, 3);
   const b = playGame(42, 3);
@@ -211,6 +226,9 @@ const levelStats = {};
 });
 test("Recruit is easier than Regular", () => {
   assert.ok(levelStats.easy.wins < levelStats.easy.losses, `Recruit should lose more than it wins vs Regular: ${JSON.stringify(levelStats.easy)}`);
+});
+test("Aggressive is stronger than Regular", () => {
+  assert.ok(levelStats.hard.wins > levelStats.hard.losses, `Aggressive should beat Regular more often than not: ${JSON.stringify(levelStats.hard)}`);
 });
 test("Aggressive AI uses Disruption", () => {
   const s = playGame(7, 6, { aiLevel: "hard" });

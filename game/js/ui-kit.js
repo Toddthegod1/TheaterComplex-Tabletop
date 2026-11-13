@@ -59,10 +59,10 @@
     if (opts.pick) cls.push("pickable");
     if (opts.disabled) cls.push("disabled");
     const badge = st && st.zone !== "GFM" && BADGE[st.origin];
-    const tip = `${c.name} — ${c.points} capability pts, deterrence ${c.cat === 1 ? "1" : "1/" + c.cat}${st ? ` · ${st.zone === "GFM" ? "GFM pool" : "Zone " + st.zone}` : ""}${st && st.origin ? ` · ${st.origin.toUpperCase()}` : ""}${st && st.status !== "ready" ? ` · ${st.status === "used" ? "committed this turn" : "supporting ASOS"}` : ""}`;
+    const tip = `${c.name} — ${c.points ? c.points + " capability pts" : "combat unit: deterrence only, cannot fill task or ASOS requirements"}, deterrence ${c.cat === 1 ? "1" : "1/" + c.cat}${st ? ` · ${st.zone === "GFM" ? "GFM pool" : "Zone " + st.zone}` : ""}${st && st.origin ? ` · ${st.origin.toUpperCase()}` : ""}${st && st.status !== "ready" ? ` · ${st.status === "used" ? "committed this turn" : "supporting ASOS"}` : ""}`;
     return `<div class="${cls.join(" ")}" data-art="${c.art}" data-cap="${id}" ${opts.data || ""} title="${K.esc(tip)}">
       <div class="band">${K.esc(c.code)}</div>
-      <div class="pts ${c.points ? "" : "zero"}">${c.points}</div>
+      <div class="pts ${c.points ? "" : "zero"}">${c.points || "⚔"}</div>
       <div class="detv">${c.cat === 1 ? "1" : "1/" + c.cat}</div>
       ${badge ? `<span class="badge ${badge[1]}">${badge[0]}</span>` : ""}</div>`;
   };

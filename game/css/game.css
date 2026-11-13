@@ -1,3 +1,9 @@
+/* Fonts are bundled (see fonts/README.txt) so the game looks the same offline. */
+@font-face { font-family: "Barlow Condensed"; font-weight: 500; font-style: normal; font-display: swap; src: url("../fonts/barlow-condensed-500.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-style: normal; font-display: swap; src: url("../fonts/barlow-condensed-600.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; font-style: normal; font-display: swap; src: url("../fonts/barlow-condensed-700.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 400 700; font-style: normal; font-display: swap; src: url("../fonts/inter-variable.woff2") format("woff2"); }
+
 /* TheaterComplex digital edition — ops-center theme */
 :root {
   --bg: #0d1217;
@@ -758,3 +764,132 @@ tr.rowflash td { animation: rowbg 2.8s ease-out both; animation-delay: var(--ago
   .taskchip { padding-top: 3px; padding-bottom: 3px; font-size: 12.5px; }
   .taskchip .btn.sm { padding: 1px 6px; }
 }
+
+
+/* ---------------------------------------------------------------- round 4 */
+/* Messages dock over the adjudicator log, which records the same events, so they never cover the board */
+.toast-wrap.inlog { top: auto; right: auto; flex-direction: column; }
+.toast-wrap.inlog .toast { width: 100%; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6); }
+[role="button"]:focus-visible, [data-inspect]:focus-visible { outline: 2px solid var(--gold2); outline-offset: 2px; }
+
+[hidden] { display: none !important; }
+
+/* Score box opens the breakdown */
+.scorebox .side { cursor: pointer; }
+.scorebox .side:hover { filter: brightness(1.25); }
+table.bd { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.bd td { padding: 3px 0; border-bottom: 1px solid var(--line); }
+table.bd td:last-child { text-align: right; font-weight: 700; font-family: var(--head); font-size: 15px; }
+table.bd tr.zero td { color: var(--faint); }
+
+/* Blocked cards say why */
+.twhy { font-size: 10px; line-height: 1.15; font-weight: 700; color: #8a2f1c; background: rgba(255, 255, 255, 0.55); border-radius: 4px; padding: 1px 4px; position: relative; z-index: 1; }
+
+/* Undo */
+.btn.undo { width: 100%; justify-content: center; margin: 0 0 8px; border-style: dashed; }
+
+/* Crisis verdict */
+.verdict { margin-top: 8px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line2); background: rgba(255, 255, 255, 0.04); font-size: 13px; }
+.verdict.won { border-color: rgba(76, 195, 138, 0.6); background: rgba(76, 195, 138, 0.1); }
+.verdict.lost { border-color: rgba(239, 100, 97, 0.6); background: rgba(239, 100, 97, 0.1); }
+
+/* Force management hints */
+.btn.hintz { border-color: var(--gold2); box-shadow: 0 0 0 1px var(--gold2); color: var(--gold2); }
+.mini .pts.zero { font-size: 0.8em; }
+
+/* Tips, save slots */
+.tipmodal { border-color: var(--gold2); }
+.slot { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 9px; margin-bottom: 8px; background: rgba(0, 0, 0, 0.2); }
+.slot.new input { flex: 1; min-width: 0; }
+
+/* End screen */
+.endstage { max-height: calc(100vh - 60px); overflow-y: auto; padding-bottom: 8px; }
+.endmore { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; margin-top: 16px; text-align: left; }
+.endmore ul { margin: 6px 0 0; padding-left: 18px; }
+.endmore li { margin: 3px 0; }
+@media (max-width: 900px) { .endmore { grid-template-columns: 1fr; } }
+
+/* Collapsible bottom bar */
+.main { position: relative; }
+.docktoggle { position: absolute; left: 10px; bottom: 0; z-index: 5; font: 600 11px var(--body); color: var(--muted); background: #121a21; border: 1px solid var(--line2); border-bottom: 0; border-radius: 8px 8px 0 0; padding: 2px 12px; cursor: pointer; }
+.docktoggle:hover { color: var(--text); border-color: var(--gold2); }
+.dockmin .dock { max-height: 40px; min-height: 0; overflow: hidden; padding-top: 8px; }
+.dockmin .dock > * { pointer-events: none; }
+
+/* More cards fit on a laptop */
+@media (max-width: 1400px) {
+  .taskcard.tc2 { width: 116px; }
+  .execcard { width: 124px; }
+  .dock { gap: 12px; }
+  .dock .col[style*="width:290px"] { width: 250px !important; }
+}
+
+/* Colour-blind marks (menu switch): arrows and shapes back up every colour cue */
+body.cb .delta.up::before { content: "▲"; margin-right: 1px; }
+body.cb .delta.down::before { content: "▼"; margin-right: 1px; }
+body.cb .chip.goodc::before { content: "▲"; font-size: 0.8em; margin-right: 4px; }
+body.cb .chip.badc::before { content: "▼"; font-size: 0.8em; margin-right: 4px; }
+body.cb .pips.t10 i { border-radius: 50%; }
+body.cb .pips.t10 i.on { background: repeating-linear-gradient(45deg, var(--tenth) 0 2px, #7a3d12 2px 4px); }
+body.cb .good::before { content: "▲ "; font-size: 0.75em; }
+body.cb .bad::before { content: "▼ "; font-size: 0.75em; }
+body.cb .verdict.won, body.cb .tray.win { border-style: double; border-width: 4px; }
+body.cb .verdict.lost { border-style: dashed; }
+body.cb .zdot.ok { outline: 2px solid #fff; outline-offset: -3px; }
+body.cb .slots i.red { border-style: dashed; }
+body.cb .taskchip.t10, body.cb .toast.t10 { border-left-style: double; border-left-width: 6px; }
+body.cb .c10::after { content: " ◆"; font-size: 0.7em; }
+body.cb .c4::after { content: " ●"; font-size: 0.7em; }
+
+/* Touch: tooltip shown on tap, inspector as a bottom sheet on narrow screens */
+#touch-tip { position: fixed; z-index: 80; max-width: min(320px, 90vw); background: #18222b; color: var(--text); border: 1px solid var(--gold2); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; box-shadow: var(--shadow); white-space: pre-line; }
+@media (max-width: 760px) {
+  .preview.inspector { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 55vh; }
+  .hud { gap: 6px; padding-left: 8px; padding-right: 8px; }
+  .hud .logo, .hud .chip { display: none; }
+  .scorebox .side { padding: 3px 7px; }
+  .dock { padding: 8px; }
+  .dock .col[style*="width:290px"] { width: 100% !important; }
+  .boards { grid-template-columns: 1fr 1fr; }
+  .btn { min-height: 36px; }
+  .handfilters .btn { min-height: 30px; }
+  .modal, .modal.wide, .modal.narrow { width: 98vw; max-height: 94vh; }
+  .modal-head { flex-wrap: wrap; }
+  .stage { padding: 0 12px; }
+  .stage h1 { font-size: 40px; }
+  .docktoggle { display: none; }
+}
+@media (pointer: coarse) {
+  .zdot { width: 22px; height: 22px; }
+  .slots i { width: 13px; height: 13px; }
+}
+
+.twhy { max-height: 2.4em; overflow: hidden; }
+
+/* ---------------------------------------------------------------- tablets and phones */
+/* The app keeps its fixed frame: the board and adviser scroll in the middle, the bottom bar stays put. */
+@media (max-width: 1050px) {
+  body { overflow: hidden; }
+  .game { height: 100%; min-height: 0; }
+  .main { display: block; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .board { overflow: visible; }
+  .side { max-height: none; display: block; }
+  .logbox { max-height: 240px; }
+  .dock { flex-wrap: wrap; max-height: 46vh; overflow-y: auto; align-items: flex-start; align-content: flex-start; }
+  .dock .col { flex: 1 1 100%; width: auto !important; min-width: 0 !important; }
+  .dock .col.scroll { max-height: none !important; overflow: visible; flex: none; }
+  .dock .hand { flex: none; }
+  .dock .btn-row { margin-top: 0 !important; }
+  .docktoggle { position: sticky; display: block; left: auto; bottom: 0; margin-left: 10px; }
+  .dockmin .dock { max-height: 38px; overflow: hidden; }
+}
+@media (max-width: 760px) {
+  .preview.inspector { top: 56px; bottom: auto; max-height: 44vh; }
+  .hud [data-act="glossary"], .hud .turn { display: none; }
+  .hud .scorebox { margin-right: auto; }
+  .docktoggle { display: block; }
+  .title-inner .menu { grid-template-columns: 1fr; }
+  .trays { grid-template-columns: 1fr; }
+  .crisis .top { grid-template-columns: 1fr; }
+}
+.endstage { max-height: calc(100vh - 84px); }

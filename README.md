@@ -14,8 +14,11 @@ Both run straight from the file system: double-click the HTML file. There's no b
 ## Playing the digital edition
 
 - **Tutorial**: one guided turn as Fourth Army against the AI. A coach points at each part of the screen and waits for you to act.
-- **New campaign**: play Fourth or Tenth Army against the AI, play two people on one screen (planning is hidden behind a hand-off screen), or watch AI vs AI. The AI opponent comes in three styles: **Recruit** (plans fewer tasks; best for a first game), **Regular**, and **Aggressive** (plays Disruption against you).
+- **New campaign**: play Fourth or Tenth Army against the AI, play two people on one screen (planning is hidden behind a hand-off screen), or watch AI vs AI. The AI opponent comes in three styles: **Recruit** (plans fewer tasks; best for a first game), **Regular**, and **Aggressive** (the strongest: it also plays Disruption against you). Regular and Aggressive put their effort where a zone is still in play, which keeps the two armies about even (101 to 91 over 200 simulated campaigns).
 - **Help while you play**: a "Your move" line in the side panel always says what to click next. During planning, ★ marks suggested task cards with their best zone, and **Suggest a plan** fills empty task slots for you. The end-of-year panel shows where each army's points came from, with tips for next year.
+- **Forgiving and explained**: **Undo** (button or Ctrl+Z) takes back your last commitment until the next dice roll. Blocked cards say what they are missing. Each crisis ends with a one-line verdict on why you won or lost the zone. Click the score to see where every point came from. Short tips appear the first time you meet even-turn decay, Disruption, violent crises, over-tasking and RFF arrivals.
+- **Keyboard and touch**: Enter presses the highlighted button, Tab reaches every card and button, arrow keys walk along the cards, Esc closes dialogs. On a touch screen the first tap on a card shows what it does and the second tap opens it.
+- **Menu (☰)**: sound on/off, first-time tips on/off, colour-blind marks (arrows and shapes back up every colour cue), named save slots, and save files you can download or send. A save file from a hot-seat game in planning is scrambled so neither staff can read the other's plan in a text editor (it is not encryption).
 - **Rules Codex**: the rulebook reorganized for play. It includes the die legend, the crisis table, all 21 task cards, the order of battle, and every rules clarification.
 
 The game automates the adjudicator. It handles the task-limit and ASOS draws, checks staff, MSC and capability requirements, over-tasking rolls, initiative, Disruption, Influence spending, all of Crisis Assessment (Intelligence, Communications and Protection advantages, scoring), force tailoring with RFF, RSOI and SecWar, and even-turn decay.
@@ -32,8 +35,11 @@ game/
   js/engine.js          turn/phase state machine and every player action
   js/ai.js              heuristic AI commander
   js/ui*.js, planner.js, crisis.js, codex.js, tutorial.js   interface
+  js/extras.js          undo, tips, score breakdown, sound, save slots, touch support
+  fonts/                bundled fonts, so the game looks the same offline
   img/                  web-sized card art (GENERATED from assets/)
   tests/run.js          rules tests + full AI-vs-AI campaign simulation
+  tests/playthrough.py  clicks through whole campaigns in a headless browser
 tools/
   build_data.py         workbook -> game/js/data.generated.js
   build_assets.py       assets/*.png -> game/img/*.webp
@@ -47,6 +53,7 @@ docs/rules-verification.md  source cross-check, discrepancies, open design quest
 - **Card art**: replace files in `assets/`, then run `python tools/build_assets.py`.
 - **Task requirements, starting values, Crisis Assessment table**: edit `game/js/data.js`.
 - **Tests**: `node game/tests/run.js [games]` checks the die legend against the printed cards, the starting deterrence against Enclosure 2, and the rule edge cases. It then plays full AI-vs-AI campaigns and checks invariants after every step.
+- **Screen tests**: `python game/tests/playthrough.py` (needs `pip install playwright` and `playwright install chromium`) plays a 4-turn campaign in each mode in a headless browser and fails on any page error or stall. Add `all 390x844` to run it at phone size.
 
 ## Open design questions
 

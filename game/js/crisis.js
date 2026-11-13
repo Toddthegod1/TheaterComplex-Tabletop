@@ -77,6 +77,44 @@
     return groups.join("");
   }
 
+  // One plain-English line for the human player: who won, by how much and why.
+  function verdict(cur, res, me) {
+    const opp = TC.other(me);
+    const a = res.teams[me];
+    const b = res.teams[opp];
+    const ct = TC.CRISIS_TYPES[cur.type];
+    const z = cur.zone;
+    const margin = Math.abs(a.total - b.total);
+    const evMe = R.expectedDice(cur.pools[me]);
+    const evOpp = R.expectedDice(cur.pools[opp]);
+    const won = res.winner === me;
+    let head;
+    let why;
+    if (!res.winner) {
+      head = `Tie at ${a.total}: nobody wins Zone ${z}.`;
+      why = "";
+    } else {
+      head = won ? `You won Zone ${z} by ${margin}.` : `You lost Zone ${z} by ${margin}.`;
+      const W = res.winner;
+      const L = TC.other(W);
+      const whose = won ? "Your" : "Their";
+      const swings = [];
+      if (res.protection && res.protection.team === W) swings.push([res.protection.before - res.protection.after, (n) => `${whose} Protection advantage took ${n} off ${won ? "their" : "your"} best die`]);
+      if (res.comms && res.comms.team === W) swings.push([res.comms.after - res.comms.before, (n) => `${whose} Communications re-roll added ${n}`]);
+      if (ct.violent) swings.push([res.teams[W].detBonus + res.teams[W].assuranceBonus - res.teams[L].detBonus - res.teams[L].assuranceBonus, (n) => `${whose} higher deterrence added ${n} more to the roll`]);
+      const decisive = swings.filter(([n]) => n > 0 && n >= margin).sort((x, y) => y[0] - x[0])[0];
+      const evW = won ? evMe : evOpp;
+      const evL = won ? evOpp : evMe;
+      if (decisive) why = `${decisive[1](decisive[0])}, which decided it.`;
+      else if (evW - evL >= 2) why = won ? `Your dice pool was the stronger one (expected ${evMe.toFixed(1)} against ${evOpp.toFixed(1)}).` : `Their dice pool was stronger (expected ${evOpp.toFixed(1)} against your ${evMe.toFixed(1)}). Raising Partner Capability, Infrastructure, Interoperability or Stockage here adds dice or makes them bigger.`;
+      else if (evL - evW >= 2) why = won ? "You beat the odds: their pool was stronger on paper." : "Bad luck: your pool was the stronger one on paper.";
+      else why = `The pools were about even and the dice went ${won ? "your" : "their"} way.`;
+    }
+    const net = (t) => res.points[t].reduce((x, p) => x + p.pts, 0);
+    const fmt = (n) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)}`;
+    return `<div class="verdict ${!res.winner ? "" : won ? "won" : "lost"}"><b>${head}</b> ${why} <span class="muted">Points from this zone: you ${fmt(net(me))}, ${TC.TEAM_INFO[opp].name} ${fmt(net(opp))}.</span></div>`;
+  }
+
   C.render = function () {
     const s = App.state;
     const cur = s.crisis && s.crisis.current;
@@ -138,7 +176,7 @@
             ${crisisTable(cur, true)}</div>
           <div><div class="banner ${ct.violent ? "warn" : "info"}" style="margin-top:0"><b>${ct.name}</b>: winner +${ct.victor}; zone bonus +${ct.bonus} if Fourth Army wins C or Tenth Army wins A; army with higher deterrence <b>${ct.deterrence > 0 ? "+" : ""}${ct.deterrence}</b>.${ct.violent ? " Each army adds its Deterrence to its roll (+1/+2 at Assurance 6/7)." : ""}</div>
             <div class="advbar">${adv("intel", "Intelligence", "Promote 1 own die or demote 1 enemy die before rolling")}${adv("comms", "Communications", "Re-roll own lowest die, keep higher")}${adv("protection", "Protection", "Enemy re-rolls its highest die, keeps lower")}</div>
-            <div class="notes">${notes}</div></div></div>
+            <div class="notes">${notes}</div>${res && a.reveal >= 3 && humans.length === 1 ? verdict(cur, res, humans[0]) : ""}</div></div>
         <div class="trays">${tray("fourth")}${tray("tenth")}</div>
         <div class="taglegend"><span><b>I</b> changed by Intelligence</span><span><b>C</b> Communications re-roll</span><span><b>P</b> Protection re-roll</span><span><b class="m">+1</b> Stockage modifier on the die</span></div>
       </div><div class="modal-foot">${foot}</div></div>`;
@@ -150,6 +188,7 @@
     a.rolling = true;
     a.reveal = 0;
     App.render();
+    App.sfx && App.sfx("roll");
     await K.sleep(1100);
     a.rolling = false;
     if (App.state !== s) return;
@@ -164,6 +203,10 @@
       if (App.state !== s) return;
       a.reveal = step;
       App.render();
+      if (step === 3 && App.sfx) {
+        const hs = App.humans();
+        App.sfx(!res.winner ? "tie" : hs.length === 1 ? (res.winner === hs[0] ? "win" : "lose") : "win");
+      }
     }
     App.flow();
   }

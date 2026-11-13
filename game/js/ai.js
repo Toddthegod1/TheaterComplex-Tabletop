@@ -9,14 +9,21 @@
   const expectedDie = (sides) => (sides + 1) / 2;
 
   // Opponent styles. noise: random spread added to each option's value.
-  // taskCut: plan this many fewer tasks than the limit. disrupt: play a task
+  // taskCut: plan this many fewer tasks than the limit. contest/base: weight
+  // each option by how contested its zone is (base + contest at a 50:50 zone,
+  // base alone where the zone is already won or lost). disrupt: play a task
   // as Disruption when it hurts the enemy clearly more than it helps itself.
-  // (Simulation: Aggressive and Regular are about even; Recruit loses ~3:1.)
+  // Simulation, 200 games per pairing: Regular against itself splits about
+  // evenly between the two armies (without the contest weighting Fourth Army
+  // won 2:1, because Tenth Army poured tasks into Zone A, which it cannot
+  // take). Aggressive beats Regular about 55-60%. Recruit loses about 3:1.
   AI.LEVELS = {
     easy: { label: "Recruit", noise: 1.6, taskCut: 2 },
-    normal: { label: "Regular", noise: 0.3, taskCut: 0 },
-    hard: { label: "Aggressive", noise: 0.3, taskCut: 0, disrupt: true },
+    normal: { label: "Regular", noise: 0.3, taskCut: 0, contest: 1.5, base: 0.25 },
+    hard: { label: "Aggressive", noise: 0.3, taskCut: 0, contest: 1.5, base: 0.25, disrupt: true },
   };
+  // The human player's operations officer always advises like a Regular.
+  const ADVISOR = AI.LEVELS.normal;
   // settings.aiLevelByTeam (optional) gives each army its own level; tests use it.
   AI.level = (state, team) => AI.LEVELS[(state.settings.aiLevelByTeam || {})[team] || state.settings.aiLevel] || AI.LEVELS.normal;
 
@@ -65,6 +72,27 @@
     return v;
   };
 
+  // ---------------------------------------------------------------- zone outlook
+  const phi = (x) => 1 / (1 + Math.exp(-1.702 * x)); // logistic stand-in for the normal CDF
+  // Chance (0..1) that `team` out-rolls the enemy in `zone` in a non-violent crisis.
+  AI.winChance = function (state, team, zone) {
+    const opp = TC.other(team);
+    const stats = (t) => {
+      const p = R.readiness(state, t, zone);
+      let mean = 0;
+      let vr = 0;
+      p.theater.forEach((d) => ((mean += expectedDie(d.sides) + p.drm), (vr += (d.sides * d.sides - 1) / 12)));
+      p.partner.forEach((d) => ((mean += expectedDie(d.sides)), (vr += (d.sides * d.sides - 1) / 12)));
+      return { mean, vr };
+    };
+    const a = stats(team);
+    const b = stats(opp);
+    const za = state.teams[team].zones[zone];
+    const zb = state.teams[opp].zones[zone];
+    let diff = a.mean - b.mean;
+    [["intel", 1], ["comms", 1.2], ["protection", 1.4]].forEach(([k, w]) => (diff += za[k] > zb[k] ? w : zb[k] > za[k] ? -w : 0));
+    return phi(diff / (Math.sqrt(a.vr + b.vr) || 1));
+  };
   function* specVariants(task) {
     const branches = task.branches ? task.branches.map((b) => b.key) : [null];
     const opts = [[]].concat((task.options || []).map((o) => [o.key]));
@@ -72,7 +100,7 @@
   }
 
   // Value of one feasible way to play a task (no randomness), or null.
-  function scoreSpec(state, team, task, spec) {
+  function scoreSpec(state, team, task, spec, lvl) {
     const ev = E.evaluateTask(state, team, spec);
     if (!ev.ok) return null;
     const load = E.commandLoad(state, team);
@@ -81,6 +109,11 @@
     if (task.special === "rsoi") value = E.gfmCaps(state, team).length ? 2.2 : 0;
     else {
       value = AI.effectValue(state, team, spec.zone, ev.req.effects);
+      if (lvl && lvl.contest) {
+        // Spend effort where the zone is still in play, less where it is already won or lost.
+        const p = AI.winChance(state, team, spec.zone);
+        value *= lvl.base + lvl.contest * 4 * p * (1 - p);
+      }
       if (Object.keys(ev.req.oppEffects).length) value += state.teams[TC.other(team)].influence > 0 ? 1.4 : 0;
     }
     value -= (task.cost.influence || 0) * 0.9 + (task.cost.access || 0) * 0.35;
@@ -103,7 +136,7 @@
         TC.ZONES.forEach((zone) => {
           for (const variant of specVariants(task)) {
             const spec = Object.assign({ num: task.num, zone }, variant);
-            let value = scoreSpec(state, team, task, spec);
+            let value = scoreSpec(state, team, task, spec, opts.advisor ? ADVISOR : lvl);
             if (value === null) continue;
             if (noise) value += R.random(state) * noise; // a little personality
             if (!best || value > best.value) best = { value, spec };
@@ -127,7 +160,7 @@
       TC.ZONES.forEach((zone) => {
         for (const variant of specVariants(task)) {
           const spec = Object.assign({ num: task.num, zone }, variant);
-          const value = scoreSpec(state, team, task, spec);
+          const value = scoreSpec(state, team, task, spec, ADVISOR);
           if (value !== null && (!best || value > best.value)) best = { num: task.num, zone, value };
         }
       });
