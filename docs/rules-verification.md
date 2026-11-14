@@ -78,6 +78,7 @@ The rest of the sheet (dice, modifiers, Limited Op/LSCO deterrence and assurance
 | MSC bandwidth | §6.D.4 says "three spaces"; the card art shows 2 white plus 3 red "overtasked" slots. §7.C.2 says the roll applies to "the third task and any subsequent tasks". | 2 free tasks. The 3rd–5th need a d6 roll greater than the tasks handled so far (4+, 5+, 6). |
 | HNS agreement effects | Workbook: requirement 1 → Capacity. Card back: Infrastructure +1 "if CA", Stockage +1 "if SUST". | Follows the card. |
 | Task capabilities by zone | The rulebook doesn't say whether a task's capabilities must be in the task's zone. ASOS explicitly allows any zone. | Same zone by default (toggle in setup). |
+| ASOS with two listed types | The card lists types without saying "and" or "or". | **Both are needed** (War College ruling, November 2026): at least one card of every listed type, together reaching the points. |
 | RFF cap and command cards | "No more than 10 additional capabilities", which says nothing about GFM command cards. | MSCs count by default (toggle). |
 | Transportation (Exped.) | Tasks ask for TRANS; the TBX card is a transportation unit. | TBX satisfies TRANS. |
 | Starting deterrence | Calculated from the cards (floor(count ÷ category) per category, summed) it gives Fourth 3/6/5 and Tenth 5/6/3. | Matches Enclosure 2 exactly, so deterrence is always calculated from the cards. |

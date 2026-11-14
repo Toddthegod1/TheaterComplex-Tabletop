@@ -268,7 +268,7 @@
     const canMeet = E.canMeetAsos(s, m.team, m.id);
     const pct = Math.min(100, (chk.total / a.points) * 100);
     return `<div class="modal" id="asos-modal"><div class="modal-head"><h2>ASOS · ${esc(a.name)}</h2><button class="btn ghost x" data-act="close-modal">✕</button></div>
-      <div class="modal-body"><div class="planner"><div class="art"><img src="${a.art}" alt=""><div class="muted" style="font-size:12.5px">Requires a combination of <b>${a.types.join(" / ")}</b> capability cards totalling <b>${a.points}</b> points or more, from any zone. Committed cards turn sideways for this turn. Deterrence is not reduced.</div></div>
+      <div class="modal-body"><div class="planner"><div class="art"><img src="${a.art}" alt=""><div class="muted" style="font-size:12.5px">Requires ${a.types.length > 1 ? "at least one card of <b>each</b> type" : "cards of type"} <b>${a.types.map((t) => TC.CAPABILITY_TYPES[t] || t).join(" + ")}</b>, totalling <b>${a.points}</b> points or more, from any zone.${chk.missing.length && m.sel.length ? ` <b class="bad">Still missing: ${chk.missing.map((t) => TC.CAPABILITY_TYPES[t] || t).join(", ")}.</b>` : ""} Committed cards turn sideways for this turn. Deterrence is not reduced.</div></div>
       <div><div style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><div class="meter ${chk.ok ? "ok" : ""}" style="flex:1"><i style="width:${pct}%"></i></div><b>${chk.total} / ${a.points}</b>
         <button class="btn sm" data-act="as-auto" ${canMeet ? "" : "disabled"}>Auto-select</button></div>
         <div class="grouped flow">${TC.ZONES.map((z) => `<div class="g"><div class="gl">Zone ${z}</div><div class="cards">${groups[z].map((id) => K.capMini(id, s, { big: true, pick: true, sel: m.sel.includes(id), ignoreStatus: true, data: `data-act="as-cap" data-id="${id}"` })).join("") || '<span class="muted" style="padding-top:18px">none</span>'}</div></div>`).join("")}</div>
@@ -391,7 +391,7 @@
       const status = E.asosCoverStatus(s, me);
       const types = new Set(unmet.flatMap((aid) => TC.ASOS_BY_ID[aid].types));
       body = `<div class="banner warn">Unmet ASOS requests must be covered by GFM forces. They are deployed first, count against the RFF cap, and stay committed (sideways) through next turn.</div>
-        ${status.map((st) => `<div style="margin-bottom:6px">${st.ok ? '<span class="chip goodc">covered</span>' : '<span class="chip badc">not covered</span>'} <b>${esc(TC.ASOS_BY_ID[st.asosId].name)}</b> — ${TC.ASOS_BY_ID[st.asosId].points} pts of ${TC.ASOS_BY_ID[st.asosId].types.join("/")}</div>`).join("")}
+        ${status.map((st) => `<div style="margin-bottom:6px">${st.ok ? '<span class="chip goodc">covered</span>' : '<span class="chip badc">not covered</span>'} <b>${esc(TC.ASOS_BY_ID[st.asosId].name)}</b> — ${TC.ASOS_BY_ID[st.asosId].points} pts, every type needed: ${TC.ASOS_BY_ID[st.asosId].types.join(" + ")}</div>`).join("")}
         <div class="grouped flow" style="margin-top:10px">${gfmGrid(s, me, "ff-asos", plan.asosCover, (id) => R.cap(id).points > 0 && [...types].some((t) => R.capMatches(R.cap(id).code, t)))}</div>`;
     }
     return `<div class="modal wide"><div class="modal-head"><h2>Force Management</h2>${K.teamChip(me)}<div class="seg" style="margin-left:14px">${tabs.map(([k, l]) => `<button class="btn sm ${m.tab === k ? "on" : ""}" data-act="ff-tab" data-k="${k}">${l}</button>`).join("")}</div><button class="btn ghost x" data-act="close-modal">✕</button></div>

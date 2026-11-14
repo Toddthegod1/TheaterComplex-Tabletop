@@ -196,7 +196,7 @@
     const avail = new Set(E.asosAvailable(state, team, asosId));
     if (!capIds.every((id) => avail.has(id))) return { ok: false, error: "Some cards are not available." };
     const chk = R.checkAsos(capIds, a);
-    if (!chk.ok) return { ok: false, error: `Need ${a.points} pts of ${a.types.join("/")}; selected ${chk.total}.` };
+    if (!chk.ok) return { ok: false, error: chk.missing.length ? `Every listed type is needed: add ${chk.missing.map((t) => TC.CAPABILITY_TYPES[t] || t).join(" and ")}.` : `Need ${a.points} pts of ${a.types.join(" + ")}; selected ${chk.total}.` };
     capIds.forEach((id) => (state.cards[id].status = "asos"));
     state.asos.alloc[team][asosId] = { caps: capIds.slice() };
     log(state, `${TC.TEAM_INFO[team].name} supports ${a.name} with ${capIds.map((id) => R.cap(id).name + " (" + state.cards[id].zone + ")").join(", ")}.`, { team });
@@ -910,6 +910,28 @@
       turn: state.turn,
       score: { fourth: state.teams.fourth.score, tenth: state.teams.tenth.score },
       crisis: state.crisis.results.map((r) => ({ zone: r.zone, type: r.type, winner: r.winner })),
+      // Everything an after-action review or data analysis needs about this turn.
+      record: {
+        taskLimit: state.taskLimit,
+        asos: state.asos.current.slice(),
+        initiative: state.impl ? state.impl.first || null : null,
+        tasks: Object.fromEntries(
+          TC.TEAMS.map((team) => [team, state.plans[team].tasks.map((t) => ({ num: t.num, name: TC.taskByNum(t.num).name, zone: t.zone, branch: t.branch || null, options: t.options || [], status: t.status, disruption: !!t.disrupt }))])
+        ),
+        rffRequested: Object.fromEntries(TC.TEAMS.map((team) => [team, state.plans[team].rffNew.length])),
+        crisis: state.crisis.results.map((r) => ({
+          zone: r.zone,
+          type: r.type,
+          instability: r.instability,
+          typeRoll: r.typeRoll,
+          winner: r.winner,
+          totals: { fourth: r.teams.fourth.total, tenth: r.teams.tenth.total },
+          dice: { fourth: r.teams.fourth.diceSum, tenth: r.teams.tenth.diceSum },
+          deterrence: { fourth: r.teams.fourth.deterrence, tenth: r.teams.tenth.deterrence },
+          points: { fourth: r.points.fourth.reduce((x, p) => x + p.pts, 0), tenth: r.points.tenth.reduce((x, p) => x + p.pts, 0) },
+        })),
+        trackers: Object.fromEntries(TC.TEAMS.map((team) => [team, { influence: state.teams[team].influence, access: Object.assign({}, state.teams[team].access), zones: JSON.parse(JSON.stringify(state.teams[team].zones)) }])),
+      },
     });
     state.lastTurn = { plans: state.plans, crisis: state.crisis, tailoring: state.tailoring };
     state.plans = { fourth: emptyPlan(), tenth: emptyPlan() };

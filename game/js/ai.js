@@ -13,10 +13,11 @@
   // each option by how contested its zone is (base + contest at a 50:50 zone,
   // base alone where the zone is already won or lost). disrupt: play a task
   // as Disruption when it hurts the enemy clearly more than it helps itself.
-  // Simulation, 200 games per pairing: Regular against itself splits about
-  // evenly between the two armies (without the contest weighting Fourth Army
-  // won 2:1, because Tenth Army poured tasks into Zone A, which it cannot
-  // take). Aggressive beats Regular about 55-60%. Recruit loses about 3:1.
+  // Simulation, 200 games: without the contest weighting Fourth Army won 2:1,
+  // because Tenth Army poured tasks into Zone A, which it cannot take. With it,
+  // and with the Nov 2026 ASOS ruling (every listed type needed), Regular
+  // against itself gives Fourth 117, Tenth 76. Aggressive and Regular are not
+  // measurably different (54-60 over 120 games). Recruit loses about 3:1.
   AI.LEVELS = {
     easy: { label: "Recruit", noise: 1.6, taskCut: 2 },
     normal: { label: "Regular", noise: 0.3, taskCut: 0, contest: 1.5, base: 0.25 },

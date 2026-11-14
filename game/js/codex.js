@@ -61,7 +61,7 @@
 
     sequence: () => `<h2>Turn sequence</h2><ol>
       <li><b>Task limit</b>: the adjudicator rolls a d6; each army may plan that many tasks (minimum 3).</li>
-      <li><b>ASOS</b>: draw 2 ASOS cards if the limit is 3, otherwise 1. Each army commits capability cards of the listed types from any zone, totalling the points. They turn sideways for the turn (deterrence is unchanged). If an army can't, it covers the request through RFF.</li>
+      <li><b>ASOS</b>: draw 2 ASOS cards if the limit is 3, otherwise 1. Each army commits capability cards from any zone: at least one of every listed type, together totalling the points. They turn sideways for the turn (deterrence is unchanged). If an army can't, it covers the request through RFF.</li>
       <li><b>Planning</b> (30 minutes at the table): choose tasks; allocate staff, MSCs and capabilities; reserve Influence/Access; plan RFF, RSOI forces and zone transfers. Plans are locked when the phase ends.</li>
       <li><b>Implementation</b>: plan-only tasks take effect first. Both armies roll d10 for initiative; the higher roll plays first, then they alternate one task at a time. Over-tasked MSCs roll d6. Once per turn an army may play a task as <b>Disruption</b>. While holding initiative an army may spend 3 Influence for −1 Instability in a zone.</li>
       <li><b>Crisis Assessment</b>: zones A, B, C in order (see that page), then theater-wide points.</li>

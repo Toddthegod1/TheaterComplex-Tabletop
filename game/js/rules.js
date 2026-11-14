@@ -193,32 +193,49 @@
     return R.checkCaps(ids, reqCaps, points).ok ? ids : null;
   };
 
-  // ASOS: any combination of the listed types totalling the points.
+  // ASOS: at least one card of EVERY listed type, together totalling the points
+  // (War College ruling, Nov 2026: "Sustainment + Military Police" needs both,
+  // not either). Combat units (0 points) cannot be committed.
   R.checkAsos = function (capIds, asos) {
     const cards = capIds.map(R.cap);
     const total = cards.reduce((s, c) => s + c.points, 0);
-    const ok = cards.every((c) => c.points > 0 && asos.types.some((t) => R.capMatches(c.code, t))) && total >= asos.points;
-    return { ok, total };
+    const valid = cards.every((c) => c.points > 0 && asos.types.some((t) => R.capMatches(c.code, t)));
+    const missing = asos.types.filter((t) => !cards.some((c) => c.points > 0 && R.capMatches(c.code, t)));
+    return { ok: valid && missing.length === 0 && total >= asos.points, total, missing };
   };
+  // Cheapest selection that works: one card per listed type (the pairing that
+  // wastes the fewest points), then more cards if the total is still short.
   R.autoAsos = function (availableIds, asos) {
     const pool = availableIds
       .map(R.cap)
       .filter((c) => c.points > 0 && asos.types.some((t) => R.capMatches(c.code, t)))
       .sort((a, b) => a.points - b.points);
-    const exact = pool.find((c) => c.points >= asos.points);
-    if (exact) return [exact.id];
-    const chosen = [];
-    let total = 0;
-    pool
-      .slice()
-      .reverse()
-      .forEach((c) => {
-        if (total < asos.points) {
-          chosen.push(c.id);
-          total += c.points;
-        }
-      });
-    return total >= asos.points ? chosen : null;
+    let best = null;
+    const pick = (i, chosen) => {
+      if (i === asos.types.length) {
+        const total = chosen.reduce((s, c) => s + c.points, 0);
+        // Prefer reaching the points with the least excess; otherwise get as close as possible.
+        const score = total >= asos.points ? total - asos.points : 1000 + asos.points - total;
+        if (!best || score < best.score) best = { score, chosen: chosen.slice(), total };
+        return;
+      }
+      if (chosen.some((c) => R.capMatches(c.code, asos.types[i]))) return pick(i + 1, chosen);
+      pool.filter((c) => !chosen.includes(c) && R.capMatches(c.code, asos.types[i])).forEach((c) => pick(i + 1, chosen.concat(c)));
+    };
+    pick(0, []);
+    if (!best) return null; // some listed type is not available at all
+    const chosen = best.chosen;
+    let total = best.total;
+    const rest = pool.filter((c) => !chosen.includes(c));
+    while (total < asos.points && rest.length) {
+      const gap = asos.points - total;
+      const c = rest.find((x) => x.points >= gap) || rest[rest.length - 1];
+      rest.splice(rest.indexOf(c), 1);
+      chosen.push(c);
+      total += c.points;
+    }
+    const ids = chosen.map((c) => c.id);
+    return R.checkAsos(ids, asos).ok ? ids : null;
   };
 
   // ---------------------------------------------------------------- effects

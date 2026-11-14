@@ -289,7 +289,7 @@
             <div class="hint">The tabletop game runs for a set time (typically 4 hours). The turn track goes to 10.</div></div>
           <div class="field"><label>Planning timer</label>${seg("planTimerMinutes", [[0, "Off"], [10, "10 min"], [20, "20 min"], [30, "30 min (rules)"]], s.settings.planTimerMinutes)}</div>
           ${s.mode !== "hotseat" ? `<div class="field"><label>AI opponent</label>${seg("aiLevel", Object.entries(AI.LEVELS).map(([k, l]) => [k, l.label]), s.settings.aiLevel)}
-            <div class="hint">${{ easy: "Recruit plans fewer tasks and makes loose choices. Best for your first campaign.", normal: "Regular plays a full, sensible campaign.", hard: "Aggressive is the strongest opponent: it plays like Regular and also turns tasks against you with Disruption." }[s.settings.aiLevel] || ""}</div></div>` : ""}
+            <div class="hint">${{ easy: "Recruit plans fewer tasks and makes loose choices. Best for your first campaign.", normal: "Regular plays a full, sensible campaign.", hard: "Aggressive plays like Regular and also turns tasks against you with Disruption." }[s.settings.aiLevel] || ""}</div></div>` : ""}
           <div class="field"><label>AI pace</label>${seg("aiSpeed", [[2, "Deliberate"], [1, "Normal"], [0.4, "Fast"]], s.settings.aiSpeed)}</div>
           <div class="field"><label>Seed (optional)</label><input type="text" data-act="setup-seed" value="${esc(s.seed)}" placeholder="random"><div class="hint">Same seed = same dice and draws, for exercises and after-action review.</div></div>
         </div>
@@ -538,7 +538,7 @@
         break;
       case "asos":
         title = "Army Support to Other Services (ASOS)";
-        body = `<p>The other Services need Army capabilities. Commit cards of the listed types whose capability points reach the requirement. They come from <b>any</b> zone and are turned sideways for this turn, but still count for deterrence.</p><p>If you truly cannot meet a request, declare it unmet and cover it with GFM forces in your RFF this turn.</p>`;
+        body = `<p>The other Services need Army capabilities. Commit at least one card of <b>every</b> listed type, with capability points that reach the requirement. They come from <b>any</b> zone and are turned sideways for this turn, but still count for deterrence.</p><p>If you truly cannot meet a request, declare it unmet and cover it with GFM forces in your RFF this turn.</p>`;
         break;
       case "planning":
         title = `${name} — campaign planning`;
@@ -681,7 +681,7 @@
         const a = TC.ASOS_BY_ID[aid];
         const al = s.asos.alloc[me][aid];
         const status = !al ? '<span class="chip warnc">Awaiting support</span>' : al.unmet ? '<span class="chip badc">Unmet — cover via RFF</span>' : `<span class="chip goodc">Supported (${al.caps.length} card${al.caps.length > 1 ? "s" : ""})</span>`;
-        return `<div style="display:flex;gap:10px;align-items:center"><img src="${a.art}" data-art="${a.art}" style="width:72px;border-radius:6px"><div><b style="font-family:var(--head);font-size:17px">${esc(a.name)}</b><div class="muted">${a.points} pts of ${a.types.map((t) => TC.CAPABILITY_TYPES[t] || t).join(" or ")}</div>${status}
+        return `<div style="display:flex;gap:10px;align-items:center"><img src="${a.art}" data-art="${a.art}" style="width:72px;border-radius:6px"><div><b style="font-family:var(--head);font-size:17px">${esc(a.name)}</b><div class="muted">${a.points} pts of ${a.types.map((t) => TC.CAPABILITY_TYPES[t] || t).join(" + ")}</div>${status}
           <div style="margin-top:6px"><button class="btn sm ${!al ? "primary" : ""}" data-act="asos-open" data-id="${aid}" ${!App.isHuman(me) ? "disabled" : ""}>${al ? "Change" : "Allocate forces"}</button></div></div></div>`;
       })
       .join("");
@@ -986,7 +986,7 @@
           ${hist.map((h, i) => `<text x="${x(i + 1)}" y="${H - 4}" fill="#93a1ad" font-size="11" text-anchor="middle">T${h.turn}</text>`).join("")}</svg>
           </div><div><table class="hist"><tr><th>Turn</th><th>Zone A</th><th>Zone B</th><th>Zone C</th><th>Score</th></tr>${rows}</table>${K.crisisLegend()}</div></div>
         ${TC.endAnalysis ? TC.endAnalysis(s) : ""}
-        <div class="btn-row" style="justify-content:center;margin-top:20px"><button class="btn" data-act="title">Main menu</button><button class="btn" data-act="score">Score breakdown</button><button class="btn" data-act="export">💾 Download save file</button><button class="btn primary lg" data-act="setup">New campaign</button></div></div>`;
+        <div class="btn-row" style="justify-content:center;margin-top:20px"><button class="btn" data-act="title">Main menu</button><button class="btn" data-act="score">Score breakdown</button><button class="btn" data-act="export-log">📜 Adjudicator log</button><button class="btn" data-act="export-record">📊 Campaign record</button><button class="btn" data-act="export">💾 Download save file</button><button class="btn primary lg" data-act="setup">New campaign</button></div></div>`;
     },
     menu() {
       return `<div class="modal narrow"><div class="modal-head"><h2>Menu</h2><button class="btn ghost x" data-act="overlay-close">✕</button></div>
@@ -994,6 +994,8 @@
           <button class="btn" data-act="codex">📖 Rules Codex</button>
           <button class="btn" data-act="export">💾 Download save file</button>
           <button class="btn" data-act="import">📂 Load save file</button>
+          <button class="btn" data-act="export-log" title="Every adjudicator log line as a spreadsheet (CSV): turn, phase, army, text">📜 Export adjudicator log (spreadsheet)</button>
+          <button class="btn" data-act="export-record" title="The whole campaign as structured data (JSON) for analysis: settings, every turn's tasks, crises, scores and trackers, plus the log">📊 Export campaign record (data)</button>
           ${App.state.tutorial ? "" : '<button class="btn" data-act="saves">🗂 Saved campaigns (slots)</button>'}
           <button class="btn" data-act="sound-toggle">${App.soundOn() ? "🔊 Sound: on" : "🔇 Sound: off"}</button>
           <button class="btn" data-act="tips-toggle">💡 First-time tips: ${App.tipsOn() ? "on" : "off"}</button>

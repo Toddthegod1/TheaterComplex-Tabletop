@@ -417,6 +417,47 @@
     return JSON.parse(new TextDecoder().decode(bytes));
   };
 
+  // ================================================================ adjudicator log and campaign record
+  function download(name, text, type) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  const stamp = (s) => `seed${s.seed}-turn${Math.min(s.turn, s.settings.turns)}`;
+  // One row per adjudicator log line. Opens directly in Excel.
+  App.logCsv = function (s) {
+    const q = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+    const rows = [["line", "turn", "phase", "army", "kind", "text"].join(",")];
+    s.log.forEach((l, i) => rows.push([i + 1, l.turn, q(l.phase), q(l.team ? TC.TEAM_INFO[l.team].name : ""), q(l.tone), q(l.text)].join(",")));
+    return "\uFEFF" + rows.join("\r\n");
+  };
+  // The campaign as structured data. Field names are stable so records from
+  // many games can be loaded into one table.
+  App.campaignRecord = function (s) {
+    const level = (t) => (s.controllers[t] === "human" ? "human" : `ai:${(s.settings.aiLevelByTeam || {})[t] || s.settings.aiLevel}`);
+    return {
+      format: "theatercomplex-campaign-record",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      seed: s.seed,
+      settings: s.settings,
+      players: { fourth: level("fourth"), tenth: level("tenth") },
+      finished: s.phase === "gameOver",
+      winner: s.phase === "gameOver" ? s.winner || "draw" : null,
+      score: { fourth: s.teams.fourth.score, tenth: s.teams.tenth.score },
+      scoreBySource: { fourth: App.scoreBreakdown(s, "fourth"), tenth: App.scoreBreakdown(s, "tenth") },
+      turns: s.history.map((h) => Object.assign({ turn: h.turn, scoreAfter: h.score }, h.record || { crisis: h.crisis })),
+      scoreEvents: s.scoreEvents,
+      log: s.log.map((l, i) => ({ line: i + 1, turn: l.turn, phase: l.phase, army: l.team, kind: l.tone, text: l.text })),
+    };
+  };
+  // In a hot-seat game the current year's plans are still secret during planning;
+  // the log only ever contains what both staffs have already seen.
+  App.actions["export-log"] = () => App.state && download(`theatercomplex-log-${stamp(App.state)}.csv`, App.logCsv(App.state), "text/csv");
+  App.actions["export-record"] = () => App.state && download(`theatercomplex-record-${stamp(App.state)}.json`, JSON.stringify(App.campaignRecord(App.state), null, 1), "application/json");
+
   // ================================================================ title-screen extras
   // The free-form tabletop lives outside the game folder; only offer the link
   // when it is really there (it is missing when just `game/` was shared).
