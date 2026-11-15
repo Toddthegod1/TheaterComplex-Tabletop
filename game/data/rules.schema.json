@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TheaterComplex rules data",
+  "description": "Starting tracker values, task cards and the Crisis Assessment table. Checked by game/tools/build_rules.js every time the game data is rebuilt.",
+  "type": "object",
+  "required": ["start", "crisisTable", "crisisTypes", "tasks"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "about": { "type": "string" },
+    "start": {
+      "description": "Rulebook Enclosure 2: initial tracker values for each army.",
+      "type": "object",
+      "required": ["fourth", "tenth"],
+      "additionalProperties": false,
+      "properties": { "fourth": { "$ref": "#/$defs/armyStart" }, "tenth": { "$ref": "#/$defs/armyStart" } }
+    },
+    "crisisTable": {
+      "description": "Adjudicator's Crisis Assessment sheet. One row per Instability band; each number is the highest d10 roll that still gives that crisis type. Anything above limitedOperationUpTo is a Large-Scale Combat Operation.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["instabilityFrom", "instabilityTo", "statusQuoUpTo", "showOfForceUpTo", "limitedOperationUpTo"],
+        "additionalProperties": false,
+        "properties": {
+          "instabilityFrom": { "type": "integer", "minimum": 0 },
+          "instabilityTo": { "type": ["integer", "null"], "description": "null on the last row: this value and above." },
+          "statusQuoUpTo": { "type": "integer", "minimum": 0, "maximum": 10 },
+          "showOfForceUpTo": { "type": "integer", "minimum": 0, "maximum": 10 },
+          "limitedOperationUpTo": { "type": "integer", "minimum": 0, "maximum": 10 }
+        }
+      }
+    },
+    "crisisTypes": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["key", "name", "violent", "winnerPoints", "objectiveZoneBonus", "higherDeterrencePoints"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "enum": ["SQ", "SOF", "LIM", "LSCO"] },
+          "name": { "type": "string" },
+          "violent": { "type": "boolean", "description": "Violent crises add each army's Deterrence to its roll." },
+          "winnerPoints": { "type": "integer" },
+          "objectiveZoneBonus": { "type": "integer" },
+          "higherDeterrencePoints": { "type": "integer", "description": "Points for the army with the higher Deterrence in the zone. Negative in violent crises." }
+        }
+      }
+    },
+    "tasks": {
+      "description": "The task cards, in card-number order.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/task" }
+    }
+  },
+  "$defs": {
+    "trackerValue": { "type": "integer", "minimum": 1, "maximum": 7 },
+    "armyStart": {
+      "type": "object",
+      "required": ["influence", "access", "zones"],
+      "additionalProperties": false,
+      "properties": {
+        "influence": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "access": {
+          "type": "object",
+          "required": ["A", "B", "C"],
+          "additionalProperties": false,
+          "properties": { "A": { "type": "integer", "minimum": 0 }, "B": { "type": "integer", "minimum": 0 }, "C": { "type": "integer", "minimum": 0 } }
+        },
+        "zones": {
+          "type": "object",
+          "required": ["A", "B", "C"],
+          "additionalProperties": false,
+          "properties": { "A": { "$ref": "#/$defs/zoneStart" }, "B": { "$ref": "#/$defs/zoneStart" }, "C": { "$ref": "#/$defs/zoneStart" } }
+        }
+      }
+    },
+    "zoneStart": {
+      "type": "object",
+      "required": ["assurance", "partnerCap", "infrastructure", "interop", "intel", "stockage", "comms", "protection"],
+      "additionalProperties": false,
+      "properties": {
+        "assurance": { "$ref": "#/$defs/trackerValue" },
+        "partnerCap": { "$ref": "#/$defs/trackerValue" },
+        "infrastructure": { "$ref": "#/$defs/trackerValue" },
+        "interop": { "$ref": "#/$defs/trackerValue" },
+        "intel": { "$ref": "#/$defs/trackerValue" },
+        "stockage": { "$ref": "#/$defs/trackerValue" },
+        "comms": { "$ref": "#/$defs/trackerValue" },
+        "protection": { "$ref": "#/$defs/trackerValue" }
+      }
+    },
+    "staffCode": { "enum": ["ENG", "FIRES", "INTEL", "MED", "OPS", "PLANS", "PROT", "SIG", "SUST"] },
+    "commandCode": {
+      "description": "Major subordinate command type. ANY is a dotted box on the card: any MSC will do.",
+      "enum": ["TSC", "ESC", "SPT", "SIG", "MI", "FIRES", "ENG", "MED", "MP", "CBRN", "AMD", "CA", "ANY"]
+    },
+    "capabilityCode": {
+      "description": "Capability type. ANY is a dotted box on the card: any capability will do.",
+      "enum": ["AMD", "AR", "AV", "CA", "CBRN", "DIG LN", "ENG", "FIRES", "IN", "IN-AASLT", "IN-ABN", "IN-STRY", "IO", "MED", "MI", "MP", "MULT DOM", "SFA", "SIG", "SUST", "TBX", "TRANS", "ANY"]
+    },
+    "effects": {
+      "description": "Tracker changes. Zone trackers change in the task's zone; influence is theater-wide.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "influence": { "type": "integer" },
+        "access": { "type": "integer" },
+        "assurance": { "type": "integer" },
+        "partnerCap": { "type": "integer" },
+        "infrastructure": { "type": "integer" },
+        "interop": { "type": "integer" },
+        "stockage": { "type": "integer" },
+        "intel": { "type": "integer" },
+        "comms": { "type": "integer" },
+        "protection": { "type": "integer" }
+      }
+    },
+    "part": {
+      "description": "An OR box (chooseOne) or a dashed optional box (optional) on a task card: extra requirements and what they add.",
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" },
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/commandCode" } },
+        "capabilities": { "type": "array", "items": { "$ref": "#/$defs/capabilityCode" } },
+        "effects": { "$ref": "#/$defs/effects" },
+        "opponentEffects": { "$ref": "#/$defs/effects" }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "num", "name", "function", "staff", "commands", "capabilities", "points", "effects"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^task_[0-9]{2}$", "description": "Stable identifier. Never reuse or renumber." },
+        "num": { "type": "integer", "minimum": 1, "description": "Number printed on the card; also picks the card art." },
+        "name": { "type": "string", "minLength": 1 },
+        "function": { "type": "string", "description": "Theater Army function printed on the card." },
+        "mode": { "enum": ["P", "E"], "description": "P: plan-only (takes effect before execution). E: execute-only (needs no staff). Leave out for a normal task." },
+        "blockedByHighAssurance": { "type": "boolean", "description": "Card shows the crossed-out T icon: cannot be played in a zone at Assurance 6 or 7." },
+        "special": { "enum": ["rsoi"], "description": "Cards whose effect is not a tracker change." },
+        "staff": {
+          "description": "Staff cells that plan the task, or ALL for a marker on every staff card.",
+          "oneOf": [{ "const": "ALL" }, { "type": "array", "items": { "$ref": "#/$defs/staffCode" } }]
+        },
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/commandCode" }, "description": "One entry per command box on the card." },
+        "capabilities": { "type": "array", "items": { "$ref": "#/$defs/capabilityCode" }, "description": "One entry per capability box. Every listed type must be represented." },
+        "points": { "type": "integer", "minimum": 0, "description": "Capability points needed to execute." },
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "influence": { "type": "integer", "minimum": 1 }, "access": { "type": "integer", "minimum": 1 } }
+        },
+        "effects": { "$ref": "#/$defs/effects" },
+        "chooseOne": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/part" } },
+        "optional": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/part" } }
+      }
+    }
+  }
+}

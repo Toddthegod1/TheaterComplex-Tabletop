@@ -152,6 +152,8 @@
       notes = App.isHuman(cur.intelTeam)
         ? `<b class="${cur.intelTeam === "fourth" ? "c4" : "c10"}">${TC.TEAM_INFO[cur.intelTeam].name}</b> has the Intelligence advantage. Click one of your dice to <b>promote</b> it, or one enemy die to <b>demote</b> it (one size).`
         : `${TC.TEAM_INFO[cur.intelTeam].name} weighs its Intelligence advantage…`;
+    } else if (TC.net && TC.net.active && !TC.net.host && cur.stage === "ready") {
+      notes = "The host rolls the Defense Readiness dice for both armies.";
     } else if (cur.intelChoice) {
       const ic = cur.intelChoice;
       notes = `Intelligence: ${TC.TEAM_INFO[cur.intelTeam].name} ${ic.kind}d ${ic.target === cur.intelTeam ? "its own" : TC.TEAM_INFO[ic.target].name + "'s"} die d${ic.before} → d${ic.after}. `;
@@ -246,7 +248,7 @@
     const cur = s.crisis && s.crisis.current;
     if (!cur || autoBusy || anim().rolling) return;
     const humans = App.humans();
-    if (cur.stage === "intel" && !App.isHuman(cur.intelTeam)) {
+    if (cur.stage === "intel" && App.isAI(cur.intelTeam)) {
       autoBusy = true;
       await K.sleep(800 * App.speed());
       autoBusy = false;

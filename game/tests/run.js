@@ -4,7 +4,7 @@
 const path = require("path");
 const assert = require("assert");
 const js = (f) => require(path.join(__dirname, "..", "js", f));
-["data.generated.js", "data.js", "rules.js", "engine.js", "ai.js"].forEach(js);
+["data.generated.js", "rules.generated.js", "data.js", "rules.js", "engine.js", "ai.js"].forEach(js);
 const { rules: R, engine: E, ai: AI } = TC;
 R.indexCards();
 
@@ -227,6 +227,40 @@ test("each finished turn stores a record for the adjudicator export", () => {
   r.tasks.fourth.forEach((t) => assert.ok(t.num && t.zone && t.status));
 });
 
+test("rules.json is valid and rules.generated.js is up to date", () => {
+  const { build } = require(path.join(__dirname, "..", "tools", "build_rules.js"));
+  const r = build();
+  assert.deepStrictEqual(r.errors, []);
+  const onDisk = require("fs").readFileSync(path.join(__dirname, "..", "js", "rules.generated.js"), "utf8").replace(/\r\n/g, "\n");
+  assert.strictEqual(onDisk, r.text, "run: node game/tools/build_rules.js");
+});
+test("the rules schema catches typos and impossible values", () => {
+  const fs = require("fs");
+  const { validate } = require(path.join(__dirname, "..", "tools", "build_rules.js"));
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "rules.schema.json"), "utf8"));
+  const good = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "rules.json"), "utf8"));
+  const check = (change) => {
+    const d = JSON.parse(JSON.stringify(good));
+    change(d);
+    const errors = [];
+    validate(schema, d, schema, "rules", errors);
+    return errors;
+  };
+  assert.strictEqual(check(() => {}).length, 0);
+  assert.ok(check((d) => (d.tasks[0].staff = ["PLANZ"])).length, "unknown staff code");
+  assert.ok(check((d) => (d.tasks[3].effects.intell = 1)).length, "misspelt tracker");
+  assert.ok(check((d) => (d.start.fourth.zones.A.assurance = 9)).length, "tracker value above 7");
+  assert.ok(check((d) => delete d.tasks[5].points).length, "missing field");
+});
+test("a campaign record has the fields the analysis tool reads", () => {
+  const rec = E.campaignRecord(playGame(11, 2));
+  assert.strictEqual(rec.format, "theatercomplex-campaign-record");
+  assert.strictEqual(rec.turns.length, 2);
+  assert.deepStrictEqual(rec.players, { fourth: "ai:normal", tenth: "ai:normal" });
+  const t = rec.turns[0];
+  ["taskLimit", "tasks", "crisis", "trackers", "rffArrived", "scoreAfter"].forEach((k) => assert.ok(k in t, `turn record lacks ${k}`));
+  assert.ok(rec.scoreBySource.fourth.some((r) => r.key === "wins"));
+});
 test("same seed replays identically", () => {
   const a = playGame(42, 3);
   const b = playGame(42, 3);

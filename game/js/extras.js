@@ -80,21 +80,7 @@
   };
 
   // ================================================================ score breakdown
-  const CATS = [
-    ["wins", "Zone wins", (e) => /^won Zone/.test(e.reason)],
-    ["bonus", "Objective-zone bonus", (e) => /^zone bonus/.test(e.reason)],
-    ["detUp", "Deterrence lead in calm crises", (e) => /^higher deterrence/.test(e.reason) && e.pts > 0],
-    ["detDown", "Deterrence lead in violent crises", (e) => /^higher deterrence/.test(e.reason) && e.pts < 0],
-    ["influence", "Influence lead", (e) => /Influence/.test(e.reason)],
-    ["overtask", "Over-tasked MSCs", (e) => /over-tasked/.test(e.reason)],
-  ];
-  App.scoreBreakdown = function (s, team) {
-    const mine = s.scoreEvents.filter((e) => e.team === team);
-    const rows = CATS.map(([key, label, test]) => ({ key, label, pts: mine.filter(test).reduce((x, e) => x + e.pts, 0) }));
-    const other = mine.filter((e) => !CATS.some((c) => c[2](e))).reduce((x, e) => x + e.pts, 0);
-    if (other) rows.push({ key: "other", label: "Other", pts: other });
-    return rows;
-  };
+  App.scoreBreakdown = E.scoreBreakdown;
   const signed = (n) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)}`;
   App.scoreTip = function (s, team) {
     const rows = App.scoreBreakdown(s, team).filter((r) => r.pts);
@@ -435,24 +421,7 @@
   };
   // The campaign as structured data. Field names are stable so records from
   // many games can be loaded into one table.
-  App.campaignRecord = function (s) {
-    const level = (t) => (s.controllers[t] === "human" ? "human" : `ai:${(s.settings.aiLevelByTeam || {})[t] || s.settings.aiLevel}`);
-    return {
-      format: "theatercomplex-campaign-record",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      seed: s.seed,
-      settings: s.settings,
-      players: { fourth: level("fourth"), tenth: level("tenth") },
-      finished: s.phase === "gameOver",
-      winner: s.phase === "gameOver" ? s.winner || "draw" : null,
-      score: { fourth: s.teams.fourth.score, tenth: s.teams.tenth.score },
-      scoreBySource: { fourth: App.scoreBreakdown(s, "fourth"), tenth: App.scoreBreakdown(s, "tenth") },
-      turns: s.history.map((h) => Object.assign({ turn: h.turn, scoreAfter: h.score }, h.record || { crisis: h.crisis })),
-      scoreEvents: s.scoreEvents,
-      log: s.log.map((l, i) => ({ line: i + 1, turn: l.turn, phase: l.phase, army: l.team, kind: l.tone, text: l.text })),
-    };
-  };
+  App.campaignRecord = E.campaignRecord;
   // In a hot-seat game the current year's plans are still secret during planning;
   // the log only ever contains what both staffs have already seen.
   App.actions["export-log"] = () => App.state && download(`theatercomplex-log-${stamp(App.state)}.csv`, App.logCsv(App.state), "text/csv");

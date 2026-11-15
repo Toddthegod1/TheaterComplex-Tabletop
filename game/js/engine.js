@@ -918,7 +918,7 @@
         tasks: Object.fromEntries(
           TC.TEAMS.map((team) => [team, state.plans[team].tasks.map((t) => ({ num: t.num, name: TC.taskByNum(t.num).name, zone: t.zone, branch: t.branch || null, options: t.options || [], status: t.status, disruption: !!t.disrupt }))])
         ),
-        rffRequested: Object.fromEntries(TC.TEAMS.map((team) => [team, state.plans[team].rffNew.length])),
+        rffArrived: Object.fromEntries(TC.TEAMS.map((team) => [team, state.tailoring && state.tailoring[team] ? state.tailoring[team].arrived.length : 0])),
         crisis: state.crisis.results.map((r) => ({
           zone: r.zone,
           type: r.type,
@@ -954,4 +954,43 @@
   };
 
   E.phaseIndex = (state) => E.PHASES.findIndex((p) => p.key === state.phase);
+
+  // ---------------------------------------------------------------- records for review and analysis
+  const SCORE_SOURCES = [
+    ["wins", "Zone wins", (e) => /^won Zone/.test(e.reason)],
+    ["bonus", "Objective-zone bonus", (e) => /^zone bonus/.test(e.reason)],
+    ["detUp", "Deterrence lead in calm crises", (e) => /^higher deterrence/.test(e.reason) && e.pts > 0],
+    ["detDown", "Deterrence lead in violent crises", (e) => /^higher deterrence/.test(e.reason) && e.pts < 0],
+    ["influence", "Influence lead", (e) => /Influence/.test(e.reason)],
+    ["overtask", "Over-tasked MSCs", (e) => /over-tasked/.test(e.reason)],
+  ];
+  // Points by source for one army: [{ key, label, pts }].
+  E.scoreBreakdown = function (state, team) {
+    const mine = state.scoreEvents.filter((e) => e.team === team);
+    const rows = SCORE_SOURCES.map(([key, label, test]) => ({ key, label, pts: mine.filter(test).reduce((x, e) => x + e.pts, 0) }));
+    const other = mine.filter((e) => !SCORE_SOURCES.some((c) => c[2](e))).reduce((x, e) => x + e.pts, 0);
+    if (other) rows.push({ key: "other", label: "Other", pts: other });
+    return rows;
+  };
+  // The campaign as structured data. Field names are stable so records from
+  // many games can be loaded into one table (see game/tools/analyze.js).
+  E.campaignRecord = function (state) {
+    const s = state;
+    const level = (t) => (s.controllers[t] === "human" ? "human" : s.controllers[t] === "remote" ? "human-online" : `ai:${(s.settings.aiLevelByTeam || {})[t] || s.settings.aiLevel}`);
+    return {
+      format: "theatercomplex-campaign-record",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      seed: s.seed,
+      settings: s.settings,
+      players: { fourth: level("fourth"), tenth: level("tenth") },
+      finished: s.phase === "gameOver",
+      winner: s.phase === "gameOver" ? s.winner || "draw" : null,
+      score: { fourth: s.teams.fourth.score, tenth: s.teams.tenth.score },
+      scoreBySource: { fourth: E.scoreBreakdown(s, "fourth"), tenth: E.scoreBreakdown(s, "tenth") },
+      turns: s.history.map((h) => Object.assign({ turn: h.turn, scoreAfter: h.score }, h.record || { crisis: h.crisis })),
+      scoreEvents: s.scoreEvents,
+      log: s.log.map((l, i) => ({ line: i + 1, turn: l.turn, phase: l.phase, army: l.team, kind: l.tone, text: l.text })),
+    };
+  };
 })();

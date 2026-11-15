@@ -16,8 +16,11 @@
   // Simulation, 200 games: without the contest weighting Fourth Army won 2:1,
   // because Tenth Army poured tasks into Zone A, which it cannot take. With it,
   // and with the Nov 2026 ASOS ruling (every listed type needed), Regular
-  // against itself gives Fourth 117, Tenth 76. Aggressive and Regular are not
-  // measurably different (54-60 over 120 games). Recruit loses about 3:1.
+  // against itself gives Fourth 334, Tenth 244 over 600 games (58% of decided
+  // games; 200 games swing by +-7 points). What is left is the home zones:
+  // Zone A pays Fourth slightly more than Zone C pays Tenth. Aggressive and
+  // Regular are not measurably different (54-60 over 120 games). Recruit
+  // loses about 3:1.
   AI.LEVELS = {
     easy: { label: "Recruit", noise: 1.6, taskCut: 2 },
     normal: { label: "Regular", noise: 0.3, taskCut: 0, contest: 1.5, base: 0.25 },

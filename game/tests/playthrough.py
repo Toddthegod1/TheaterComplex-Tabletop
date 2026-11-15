@@ -56,7 +56,8 @@ def play(browser, mode):
     page.wait_for_timeout(400)
     page.click("[data-act=setup]")
     page.wait_for_timeout(200)
-    page.query_selector_all(".seg")[0].query_selector_all("button")[ALL_MODES.index(mode)].click()
+    key = {"fourth": "ai4", "tenth": "ai10", "hotseat": "hotseat", "watch": "aiai"}[mode]
+    page.click(f"[data-act=setup-set][data-key=mode][data-val='\"{key}\"']")
     page.click("[data-act=setup-set][data-key=turns][data-val='4']")
     page.click("[data-act=setup-set][data-key=aiSpeed][data-val='0.4']")
     page.fill("[data-act=setup-seed]", "123")

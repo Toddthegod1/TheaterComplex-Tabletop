@@ -16,6 +16,10 @@
   // ---------------------------------------------------------------- helpers
   App.humans = () => TC.TEAMS.filter((t) => App.state && App.state.controllers[t] === "human");
   App.isHuman = (team) => App.state && App.state.controllers[team] === "human";
+  // "remote" is the other person in an online game: neither this player nor the AI.
+  App.isAI = (team) => App.state && App.state.controllers[team] === "ai";
+  const mayAdvance = () => !TC.net || TC.net.mayAdvance();
+  const onlineGuest = () => !!(TC.net && TC.net.active && !TC.net.host);
   App.speed = () => (App.state ? App.state.settings.aiSpeed : 1);
 
   App.me = function () {
@@ -258,11 +262,12 @@
       <div class="fan">${fan}</div>
       <div class="menu">
         <div class="card" data-act="tutorial"><div class="ico">🎓</div><h3>Tutorial</h3><p>Learn by playing one guided turn as Fourth Army against an AI Tenth Army. About 15 minutes.</p></div>
-        <div class="card" data-act="setup"><div class="ico">⚔️</div><h3>New Campaign</h3><p>Two commanders on one screen (hot-seat), or command either army against the AI.</p></div>
+        <div class="card" data-act="setup"><div class="ico">⚔️</div><h3>New Campaign</h3><p>Command either army against the AI, or play another person on one screen (hot-seat) or online.</p></div>
         <div class="card" data-act="codex"><div class="ico">📖</div><h3>Rules Codex</h3><p>The full rules, die legend, crisis table, every task and capability card, and rules clarifications.</p></div>
       </div>
       <div class="btn-row" style="justify-content:center;margin-top:18px">
         ${save && save.phase !== "gameOver" ? `<button class="btn primary" data-act="continue">Continue campaign — Turn ${save.turn}, ${E.PHASES.find((p) => p.key === save.phase)?.label || ""}</button>` : ""}
+        <button class="btn ghost" data-act="online-join">Join online game…</button>
         <button class="btn ghost" data-act="import">Load save file…</button>
         ${App.hasSlots && App.hasSlots() ? '<button class="btn ghost" data-act="saves">Saved campaigns…</button>' : ""}
         <a class="btn ghost" id="tabletop-link" href="../index.html" hidden>Open free-form tabletop</a>
@@ -283,12 +288,13 @@
       <div class="setup">
         <div>
           <div class="field"><label>Commanders</label>
-            ${seg("mode", [["ai4", "You: Fourth Army vs AI"], ["ai10", "You: Tenth Army vs AI"], ["hotseat", "Two players (hot-seat)"], ["aiai", "Watch AI vs AI"]], s.mode, "root")}
+            ${seg("mode", [["ai4", "You: Fourth Army vs AI"], ["ai10", "You: Tenth Army vs AI"], ["hotseat", "Two players (hot-seat)"], ["online", "Two players online"], ["aiai", "Watch AI vs AI"]], s.mode, "root")}
+            ${s.mode === "online" ? `<div style="margin-top:6px">${seg("onlineTeam", [["fourth", "I command Fourth Army"], ["tenth", "I command Tenth Army"]], s.onlineTeam || "fourth", "root")}</div><div class="hint">You host. After Begin you get an invite code to send to your opponent, who chooses <b>Join online game</b> on their title screen.</div>` : ""}
             <div class="hint">Fourth Army starts strong in Zone A and Tenth Army in Zone C; the central Zone B usually decides the campaign. Hot-seat keeps each staff's plan hidden behind a hand-off screen during planning.</div></div>
           <div class="field"><label>Campaign length (turns = years)</label>${seg("turns", [[4, "4"], [6, "6"], [8, "8"], [10, "10"]], s.settings.turns)}
             <div class="hint">The tabletop game runs for a set time (typically 4 hours). The turn track goes to 10.</div></div>
           <div class="field"><label>Planning timer</label>${seg("planTimerMinutes", [[0, "Off"], [10, "10 min"], [20, "20 min"], [30, "30 min (rules)"]], s.settings.planTimerMinutes)}</div>
-          ${s.mode !== "hotseat" ? `<div class="field"><label>AI opponent</label>${seg("aiLevel", Object.entries(AI.LEVELS).map(([k, l]) => [k, l.label]), s.settings.aiLevel)}
+          ${s.mode !== "hotseat" && s.mode !== "online" ? `<div class="field"><label>AI opponent</label>${seg("aiLevel", Object.entries(AI.LEVELS).map(([k, l]) => [k, l.label]), s.settings.aiLevel)}
             <div class="hint">${{ easy: "Recruit plans fewer tasks and makes loose choices. Best for your first campaign.", normal: "Regular plays a full, sensible campaign.", hard: "Aggressive plays like Regular and also turns tasks against you with Disruption." }[s.settings.aiLevel] || ""}</div></div>` : ""}
           <div class="field"><label>AI pace</label>${seg("aiSpeed", [[2, "Deliberate"], [1, "Normal"], [0.4, "Fast"]], s.settings.aiSpeed)}</div>
           <div class="field"><label>Seed (optional)</label><input type="text" data-act="setup-seed" value="${esc(s.seed)}" placeholder="random"><div class="hint">Same seed = same dice and draws, for exercises and after-action review.</div></div>
@@ -330,7 +336,7 @@
     }).join("");
     const side = (team) => {
       const t = s.teams[team];
-      const you = App.humans().length === 1 && App.isHuman(team) ? '<span class="you">YOU</span>' : App.state.controllers[team] === "ai" ? '<span class="you" style="color:var(--muted)">AI</span>' : "";
+      const you = App.humans().length === 1 && App.isHuman(team) ? '<span class="you">YOU</span>' : App.state.controllers[team] === "ai" ? '<span class="you" style="color:var(--muted)">AI</span>' : App.state.controllers[team] === "remote" ? '<span class="you" style="color:var(--muted)">ONLINE</span>' : "";
       return `<div class="side ${K.teamCls(team)}" data-act="score" title="${esc(App.scoreTip ? App.scoreTip(s, team) : "")}"><span class="name"><span class="marker ${TC.TEAM_INFO[team].marker}"></span> <span class="lf">${TC.TEAM_INFO[team].name}</span><span class="ls">${TC.TEAM_INFO[team].short}</span> ${you}</span>
         <span class="pts${fx(team + ".score").cls}"${fx(team + ".score").style}>${t.score}<small>pts</small>${fx(team + ".score").html}</span><span class="inf${fx(team + ".influence").cls}"${fx(team + ".influence").style} title="Theater-wide Influence (higher earns +1 point each turn)">◆ ${t.influence} infl.${fx(team + ".influence").html}</span></div>`;
     };
@@ -340,8 +346,9 @@
       <div class="turntrack">${track}</div>
       <nav class="phases">${phases}</nav>
       <span class="spacer"></span>
-      ${s.taskLimit ? `<span class="chip" title="Adjudicator's d6 roll (minimum 3)">Task limit ${s.taskLimit}</span>` : ""}
+      ${TC.net ? TC.net.chip() : ""}${s.taskLimit ? `<span class="chip" title="Adjudicator's d6 roll (minimum 3)">Task limit ${s.taskLimit}</span>` : ""}
       <div class="scorebox">${side("fourth")}${side("tenth")}</div>
+      <button class="btn sm ghost" data-act="tabletop" id="btn-table" title="Table view: see this position as it would look on the physical table, with the real mats, tracker cards and markers">▦ <span class="lf">Table</span></button>
       <button class="btn sm ghost" data-act="glossary" title="Glossary: what ASOS, RFF, MSC, LSCO and the other abbreviations mean">Aa <span class="lf">Glossary</span></button>
       <button class="btn sm ghost" data-act="codex" title="Rules Codex">📖 <span class="lf">Rules</span></button>
       <button class="btn sm ghost" data-act="menu" title="Menu">☰</button>
@@ -900,7 +907,13 @@
       const th = s.crisis.theater;
       if (th && th.influence === opp) tips.push(`${TC.TEAM_INFO[opp].name} had more Influence (◆) and scored +1. Military engagement, SPP contact events and Intelligence support raise yours.`);
       if (th && th.overtasked[me] && th.overtasked[me].length) tips.push("An over-tasked MSC cost you a point. Spread tasks so no MSC handles more than two.");
-      if (!tips.length && s.crisis.results.some((r) => r.winner === me)) tips.push("Good year. Keep investing in your objective, Zone " + TC.TEAM_INFO[me].objectiveZone + ", where wins score a bonus point.");
+      const par = TC.BASELINE && TC.BASELINE.armies[me].par[Math.min(s.turn, TC.BASELINE.turns) - 1];
+      if (par != null) {
+        const mine = s.teams[me].score;
+        const d = Math.round((mine - par) * 10) / 10;
+        tips.push(`<b>Against par:</b> the AI playing ${TC.TEAM_INFO[me].name} averages <b>${par}</b> points after turn ${s.turn}. You have <b>${mine}</b> (${d >= 0 ? "+" : "−"}${Math.abs(d)}).`);
+      }
+      if (tips.length < 2 && s.crisis.results.some((r) => r.winner === me)) tips.push("Good year. Keep investing in your objective, Zone " + TC.TEAM_INFO[me].objectiveZone + ", where wins score a bonus point.");
     }
     return `<h3 class="yrtitle">Year ${s.turn} in review</h3><div class="trays" style="margin-top:0">${col("fourth")}${col("tenth")}</div>
       ${tips.length ? `<div class="banner tip"><b>💡 Lessons for next year</b><ul>${tips.slice(0, 3).map((t) => `<li>${t}</li>`).join("")}</ul></div>` : ""}`;
@@ -909,13 +922,13 @@
   TC.overlays = {
     turnStart() {
       const s = App.state;
-      const canRoll = App.humans().length > 0;
+      const canRoll = App.humans().length > 0 && !onlineGuest();
       const even = s.turn % 2 === 0;
       return `<div class="stage"><div class="kicker">Year ${s.turn} of ${s.settings.turns}</div><h1>TURN ${s.turn}</h1>
         <p>The adjudicator rolls a d6 for the <b>task card limit</b> (minimum 3), then draws Army Support to Other Services requests.</p>
         ${even ? '<p class="bad">Even turn: Assurance and Partner Interoperability will degrade by 1 at cleanup.</p>' : ""}
         <div class="bigdie">${K.die(6, { size: 84, value: "?", cls: App.ui.rolling ? "rolling" : "" })}</div>
-        ${canRoll ? `<button class="btn primary lg" data-act="roll-limit" id="btn-roll" ${App.ui.rolling ? "disabled" : ""}>Roll for task limit</button>` : ""}</div>`;
+        ${canRoll ? `<button class="btn primary lg" data-act="roll-limit" id="btn-roll" ${App.ui.rolling ? "disabled" : ""}>Roll for task limit</button>` : onlineGuest() ? '<p class="muted">Waiting for the host to roll…</p>' : ""}</div>`;
     },
     limitResult(o) {
       const asos = o.asos.map((id) => `<img src="${TC.ASOS_BY_ID[id].art}" data-art="${TC.ASOS_BY_ID[id].art}" style="width:130px;border-radius:9px;box-shadow:var(--shadow)">`).join("");
@@ -975,6 +988,12 @@
           hist.map((h, i) => `<circle cx="${x(i + 1)}" cy="${y(h.score[team])}" r="4" fill="${color}"><title>${TC.TEAM_INFO[team].name}, turn ${h.turn}: ${h.score[team]}</title></circle>`).join("") +
           `<text x="${x(hist.length) + 8}" y="${ly}" fill="${color}" font-size="13" font-weight="700">${last[team]}</text>`;
       };
+      // Par: what the AI averages with the human player's army (one human only).
+      const solo = App.humans().length === 1 ? App.humans()[0] : null;
+      const parVals = solo && TC.BASELINE ? hist.map((h) => TC.BASELINE.armies[solo].par[Math.min(h.turn, TC.BASELINE.turns) - 1]) : null;
+      const parLine = parVals ? `<polyline fill="none" stroke="#f3c768" stroke-width="2" stroke-dasharray="5 4" points="${[`${x(0)},${y(0)}`].concat(parVals.map((v, i) => `${x(i + 1)},${y(Math.min(maxS, v))}`)).join(" ")}"><title>AI par for ${TC.TEAM_INFO[solo].name}</title></polyline>` : "";
+      const parEnd = parVals ? parVals[parVals.length - 1] : null;
+      const parNote = parVals ? `<div class="muted" style="font-size:12.5px;margin-top:4px"><span class="gold">- - -</span> Par: the AI playing ${TC.TEAM_INFO[solo].name} averages <b>${parEnd}</b> after ${hist.length} turns. You scored <b>${last[solo]}</b> (${last[solo] - parEnd >= 0 ? "+" : "−"}${Math.abs(Math.round((last[solo] - parEnd) * 10) / 10)}).</div>` : "";
       const ticks = [minS, Math.round((minS + maxS) / 2), maxS].filter((v, i, a) => a.indexOf(v) === i);
       const grid = ticks.map((v) => `<line x1="30" x2="${W - 30}" y1="${y(v)}" y2="${y(v)}" stroke="#26313b" stroke-dasharray="3 4"/><text x="24" y="${y(v) + 4}" fill="#93a1ad" font-size="11" text-anchor="end">${v}</text>`).join("");
       const rows = hist
@@ -983,7 +1002,8 @@
       return `<div class="stage endstage" style="max-width:1000px"><div class="kicker">After-action review</div><h1>${w ? TC.TEAM_INFO[w].name.toUpperCase() + " WINS" : "DRAW"}</h1>
         <p style="font-size:20px"><b class="c4">${s.teams.fourth.score}</b> — <b class="c10">${s.teams.tenth.score}</b></p>
         <div class="endgrid"><div><div class="chartlegend"><span class="c4">● Fourth Army</span><span class="c10">● Tenth Army</span><span class="muted">score after each turn</span></div><svg class="chart" viewBox="0 0 ${W} ${H}">${grid}<line x1="30" x2="${W - 30}" y1="${y(0)}" y2="${y(0)}" stroke="#3a4651"/>${line("fourth", "#5aa2ff")}${line("tenth", "#ff9f5a")}
-          ${hist.map((h, i) => `<text x="${x(i + 1)}" y="${H - 4}" fill="#93a1ad" font-size="11" text-anchor="middle">T${h.turn}</text>`).join("")}</svg>
+          ${hist.map((h, i) => `<text x="${x(i + 1)}" y="${H - 4}" fill="#93a1ad" font-size="11" text-anchor="middle">T${h.turn}</text>`).join("")}${parLine}</svg>
+          ${parNote}
           </div><div><table class="hist"><tr><th>Turn</th><th>Zone A</th><th>Zone B</th><th>Zone C</th><th>Score</th></tr>${rows}</table>${K.crisisLegend()}</div></div>
         ${TC.endAnalysis ? TC.endAnalysis(s) : ""}
         <div class="btn-row" style="justify-content:center;margin-top:20px"><button class="btn" data-act="title">Main menu</button><button class="btn" data-act="score">Score breakdown</button><button class="btn" data-act="export-log">📜 Adjudicator log</button><button class="btn" data-act="export-record">📊 Campaign record</button><button class="btn" data-act="export">💾 Download save file</button><button class="btn primary lg" data-act="setup">New campaign</button></div></div>`;
@@ -992,6 +1012,8 @@
       return `<div class="modal narrow"><div class="modal-head"><h2>Menu</h2><button class="btn ghost x" data-act="overlay-close">✕</button></div>
         <div class="modal-body"><div class="col" style="display:flex;flex-direction:column;gap:8px">
           <button class="btn" data-act="codex">📖 Rules Codex</button>
+          ${Object.values(App.state.controllers).includes("remote") ? '<button class="btn" data-act="online">🌐 Online play: invite or reconnect</button>' : ""}
+          <button class="btn" data-act="tabletop">▦ Table view (how it looks on the real table)</button>
           <button class="btn" data-act="export">💾 Download save file</button>
           <button class="btn" data-act="import">📂 Load save file</button>
           <button class="btn" data-act="export-log" title="Every adjudicator log line as a spreadsheet (CSV): turn, phase, army, text">📜 Export adjudicator log (spreadsheet)</button>
@@ -1027,8 +1049,8 @@
         break;
       case "asos":
         if (App.ui.overlay) return;
-        TC.TEAMS.forEach((t) => !App.isHuman(t) && !E.asosComplete(s, t) && AI.allocateAsos(s, t));
-        if (TC.TEAMS.every((t) => E.asosComplete(s, t)) && (humans.length === 0 || App.ui.asosConfirmed)) {
+        TC.TEAMS.forEach((t) => App.isAI(t) && !E.asosComplete(s, t) && AI.allocateAsos(s, t));
+        if (TC.TEAMS.every((t) => E.asosComplete(s, t)) && (humans.length === 0 || App.ui.asosConfirmed) && mayAdvance()) {
           App.ui.asosConfirmed = false;
           E.beginPlanning(s);
           App.save();
@@ -1045,8 +1067,8 @@
         }
         break;
       case "planning": {
-        TC.TEAMS.forEach((t) => !App.isHuman(t) && !s.plans[t].ready && AI.plan(s, t));
-        if (E.bothReady(s)) {
+        TC.TEAMS.forEach((t) => App.isAI(t) && !s.plans[t].ready && AI.plan(s, t));
+        if (E.bothReady(s) && mayAdvance()) {
           await startImplementation();
           return;
         }
@@ -1073,7 +1095,7 @@
           }
           return;
         }
-        if (!App.isHuman(s.impl.active)) {
+        if (App.isAI(s.impl.active)) {
           App.ui.busy = true;
           await pace(900);
           App.ui.busy = false;
@@ -1083,13 +1105,13 @@
           App.save();
           App.render();
           App.flow();
-        } else App.ui.lastMe = s.impl.active;
+        } else if (App.isHuman(s.impl.active)) App.ui.lastMe = s.impl.active;
         break;
       case "crisis":
         TC.crisisUI && TC.crisisUI.auto();
         break;
       case "tailoring":
-        if (!s.tailoring) {
+        if (!s.tailoring && mayAdvance()) {
           E.forceTailoring(s);
           App.save();
           App.render();
@@ -1244,6 +1266,7 @@
       const seedTxt = seedInput ? seedInput.value.trim() : "";
       let seed;
       if (seedTxt) seed = /^\d+$/.test(seedTxt) ? Number(seedTxt) : [...seedTxt].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7);
+      if (st.mode === "online") return TC.net.hostSetup({ seed, settings: st.settings, team: st.onlineTeam || "fourth" });
       const controllers = { ai4: { fourth: "human", tenth: "ai" }, ai10: { fourth: "ai", tenth: "human" }, hotseat: { fourth: "human", tenth: "human" }, aiai: { fourth: "ai", tenth: "ai" } }[st.mode];
       App.startGame({ seed, settings: st.settings, controllers });
     },

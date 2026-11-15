@@ -1,0 +1,354 @@
+{
+  "$schema": "./rules.schema.json",
+  "about": "Rules data for the digital game: starting tracker values, task cards and the Crisis Assessment table. Edit this file, then run: node game/tools/build_rules.js",
+  "start": {
+    "fourth": {
+      "influence": 2,
+      "access": { "A": 1, "B": 1, "C": 2 },
+      "zones": {
+        "A": { "assurance": 3, "partnerCap": 3, "infrastructure": 3, "interop": 3, "intel": 3, "stockage": 3, "comms": 3, "protection": 3 },
+        "B": { "assurance": 4, "partnerCap": 2, "infrastructure": 2, "interop": 2, "intel": 2, "stockage": 2, "comms": 2, "protection": 2 },
+        "C": { "assurance": 5, "partnerCap": 1, "infrastructure": 1, "interop": 1, "intel": 1, "stockage": 1, "comms": 1, "protection": 1 }
+      }
+    },
+    "tenth": {
+      "influence": 2,
+      "access": { "A": 2, "B": 1, "C": 1 },
+      "zones": {
+        "A": { "assurance": 2, "partnerCap": 1, "infrastructure": 1, "interop": 1, "intel": 1, "stockage": 1, "comms": 1, "protection": 1 },
+        "B": { "assurance": 4, "partnerCap": 2, "infrastructure": 2, "interop": 2, "intel": 2, "stockage": 2, "comms": 2, "protection": 2 },
+        "C": { "assurance": 4, "partnerCap": 3, "infrastructure": 3, "interop": 3, "intel": 3, "stockage": 3, "comms": 3, "protection": 3 }
+      }
+    }
+  },
+  "crisisTable": [
+    { "instabilityFrom": 0, "instabilityTo": 1, "statusQuoUpTo": 7, "showOfForceUpTo": 9, "limitedOperationUpTo": 10 },
+    { "instabilityFrom": 2, "instabilityTo": 4, "statusQuoUpTo": 3, "showOfForceUpTo": 6, "limitedOperationUpTo": 9 },
+    { "instabilityFrom": 5, "instabilityTo": null, "statusQuoUpTo": 1, "showOfForceUpTo": 3, "limitedOperationUpTo": 7 }
+  ],
+  "crisisTypes": [
+    { "key": "SQ", "name": "Status Quo", "violent": false, "winnerPoints": 1, "objectiveZoneBonus": 1, "higherDeterrencePoints": 1 },
+    { "key": "SOF", "name": "Show of Force", "violent": false, "winnerPoints": 2, "objectiveZoneBonus": 1, "higherDeterrencePoints": 1 },
+    { "key": "LIM", "name": "Limited Operation", "violent": true, "winnerPoints": 4, "objectiveZoneBonus": 1, "higherDeterrencePoints": -3 },
+    { "key": "LSCO", "name": "Large-Scale Combat Operation", "violent": true, "winnerPoints": 7, "objectiveZoneBonus": 1, "higherDeterrencePoints": -3 }
+  ],
+  "tasks": [
+    {
+      "id": "task_01",
+      "num": 1,
+      "name": "Access agreement",
+      "function": "Set and maintain the theater",
+      "blockedByHighAssurance": true,
+      "staff": ["PLANS", "SIG"],
+      "commands": ["TSC", "SPT", "SIG"],
+      "capabilities": ["TRANS", "CA", "SIG"],
+      "points": 5,
+      "cost": { "influence": 1 },
+      "effects": { "access": 3, "infrastructure": 1, "comms": 1 }
+    },
+    {
+      "id": "task_02",
+      "num": 2,
+      "name": "Threat monitoring",
+      "function": "Perform CCDOR",
+      "mode": "E",
+      "staff": [],
+      "commands": ["MI", "SIG", "FIRES"],
+      "capabilities": ["MI", "SIG", "MULT DOM"],
+      "points": 8,
+      "effects": { "intel": 2 }
+    },
+    {
+      "id": "task_03",
+      "num": 3,
+      "name": "Contingency planning",
+      "function": "Perform CCDOR",
+      "mode": "P",
+      "staff": "ALL",
+      "commands": [],
+      "capabilities": [],
+      "points": 0,
+      "effects": { "intel": 1, "comms": 1, "protection": 1 }
+    },
+    {
+      "id": "task_04",
+      "num": 4,
+      "name": "Intelligence support",
+      "function": "Set and maintain the theater",
+      "staff": ["INTEL"],
+      "commands": ["MI"],
+      "capabilities": ["MI", "CA"],
+      "points": 7,
+      "effects": { "influence": 1, "interop": 1, "intel": 1 }
+    },
+    {
+      "id": "task_05",
+      "num": 5,
+      "name": "Information operations",
+      "function": "Set and maintain the theater",
+      "staff": ["FIRES", "INTEL"],
+      "commands": ["FIRES", "MI"],
+      "capabilities": ["IO", "CA"],
+      "points": 5,
+      "effects": {},
+      "chooseOne": [
+        {
+          "key": "GAIN",
+          "label": "Gain +1 Influence",
+          "effects": { "influence": 1 }
+        },
+        {
+          "key": "DENY",
+          "label": "Opponent −1 Influence (no Disruption card needed)",
+          "opponentEffects": { "influence": -1 }
+        }
+      ]
+    },
+    {
+      "id": "task_06",
+      "num": 6,
+      "name": "Theater distribution",
+      "function": "Set and maintain the theater",
+      "mode": "E",
+      "staff": [],
+      "commands": ["TSC", "ESC"],
+      "capabilities": ["TRANS", "SUST"],
+      "points": 6,
+      "effects": { "stockage": 1 }
+    },
+    {
+      "id": "task_07",
+      "num": 7,
+      "name": "RSOI",
+      "function": "Set and maintain the theater",
+      "special": "rsoi",
+      "staff": ["SUST", "OPS"],
+      "commands": ["TSC", "ANY"],
+      "capabilities": ["TRANS", "SUST", "ANY"],
+      "points": 5,
+      "effects": {}
+    },
+    {
+      "id": "task_08",
+      "num": 8,
+      "name": "SPP contact event",
+      "function": "Perform CCDOR",
+      "blockedByHighAssurance": true,
+      "staff": ["OPS"],
+      "commands": ["SPT", "ANY"],
+      "capabilities": ["ANY"],
+      "points": 3,
+      "effects": { "influence": 2, "partnerCap": 1, "intel": 1 }
+    },
+    {
+      "id": "task_09",
+      "num": 9,
+      "name": "Combined exercise",
+      "function": "Perform CCDOR",
+      "blockedByHighAssurance": true,
+      "staff": ["OPS", "SUST"],
+      "commands": ["ANY", "TSC"],
+      "capabilities": ["ANY", "SUST"],
+      "points": 5,
+      "effects": { "assurance": 1, "partnerCap": 1, "interop": 1 }
+    },
+    {
+      "id": "task_10",
+      "num": 10,
+      "name": "HNS agreement",
+      "function": "Set and maintain the theater",
+      "blockedByHighAssurance": true,
+      "staff": ["SUST", "OPS"],
+      "commands": ["TSC", "SPT"],
+      "capabilities": [],
+      "points": 5,
+      "cost": { "influence": 1 },
+      "effects": {},
+      "chooseOne": [
+        {
+          "key": "SUST",
+          "label": "Sustainment path: Stockage +1",
+          "capabilities": ["SUST"],
+          "effects": { "stockage": 1 }
+        },
+        {
+          "key": "CA",
+          "label": "Civil Affairs path: Infrastructure +1",
+          "capabilities": ["CA"],
+          "effects": { "infrastructure": 1 }
+        }
+      ],
+      "optional": [
+        {
+          "key": "MP",
+          "label": "Add Military Police: Protection +1",
+          "capabilities": ["MP"],
+          "effects": { "protection": 1 }
+        }
+      ]
+    },
+    {
+      "id": "task_11",
+      "num": 11,
+      "name": "Stockage adjustment",
+      "function": "Set and maintain the theater",
+      "staff": ["SUST", "PLANS"],
+      "commands": ["TSC", "ENG"],
+      "capabilities": ["SUST", "ENG"],
+      "points": 7,
+      "cost": { "access": 2 },
+      "effects": { "assurance": 1, "stockage": 1 },
+      "optional": [
+        {
+          "key": "MED",
+          "label": "Add Medical: Assurance +2 instead of +1",
+          "commands": ["MED"],
+          "capabilities": ["MED"],
+          "effects": { "assurance": 1 }
+        }
+      ]
+    },
+    {
+      "id": "task_12",
+      "num": 12,
+      "name": "Military engagement",
+      "function": "Perform CCDOR",
+      "blockedByHighAssurance": true,
+      "staff": ["PLANS", "OPS"],
+      "commands": ["SPT", "ANY"],
+      "capabilities": ["CA", "ANY"],
+      "points": 5,
+      "effects": { "access": 1, "influence": 1, "partnerCap": 1 }
+    },
+    {
+      "id": "task_13",
+      "num": 13,
+      "name": "Security force assistance",
+      "function": "Perform CCDOR",
+      "blockedByHighAssurance": true,
+      "staff": ["OPS", "INTEL"],
+      "commands": ["ANY"],
+      "capabilities": ["SFA", "DIG LN"],
+      "points": 7,
+      "effects": { "access": 1, "partnerCap": 1, "interop": 1 },
+      "optional": [
+        {
+          "key": "MI",
+          "label": "Add Military Intelligence: Intelligence +1",
+          "capabilities": ["MI"],
+          "effects": { "intel": 1 }
+        }
+      ]
+    },
+    {
+      "id": "task_14",
+      "num": 14,
+      "name": "Basing agreement",
+      "function": "Set and maintain the theater",
+      "blockedByHighAssurance": true,
+      "staff": ["SUST", "ENG"],
+      "commands": ["ENG", "TSC"],
+      "capabilities": ["ENG", "SUST"],
+      "points": 4,
+      "cost": { "influence": 2, "access": 3 },
+      "effects": { "assurance": 2, "infrastructure": 2 }
+    },
+    {
+      "id": "task_15",
+      "num": 15,
+      "name": "Storage agreement",
+      "function": "Set and maintain the theater",
+      "blockedByHighAssurance": true,
+      "staff": ["SUST", "ENG"],
+      "commands": ["TSC"],
+      "capabilities": ["SUST"],
+      "points": 5,
+      "cost": { "influence": 2, "access": 2 },
+      "effects": {},
+      "chooseOne": [
+        {
+          "key": "ENG",
+          "label": "Engineer path: Stockage +2",
+          "commands": ["ENG"],
+          "capabilities": ["ENG"],
+          "effects": { "stockage": 2 }
+        },
+        {
+          "key": "MED",
+          "label": "Medical path: Assurance +2",
+          "commands": ["MED"],
+          "capabilities": ["MED"],
+          "effects": { "assurance": 2 }
+        }
+      ]
+    },
+    {
+      "id": "task_16",
+      "num": 16,
+      "name": "Communications network development",
+      "function": "Set and maintain the theater",
+      "staff": ["SIG"],
+      "commands": ["SIG"],
+      "capabilities": ["SIG", "MI"],
+      "points": 5,
+      "cost": { "access": 1 },
+      "effects": { "comms": 2 }
+    },
+    {
+      "id": "task_17",
+      "num": 17,
+      "name": "Medical operations",
+      "function": "Set and support the operational area",
+      "staff": ["MED"],
+      "commands": ["MED", "SPT"],
+      "capabilities": ["MED", "CA"],
+      "points": 5,
+      "effects": { "infrastructure": 1, "interop": 1, "intel": 1 }
+    },
+    {
+      "id": "task_18",
+      "num": 18,
+      "name": "Force health protection",
+      "function": "Set and support the operational area",
+      "staff": ["PROT", "MED", "INTEL"],
+      "commands": ["MED"],
+      "capabilities": ["MED"],
+      "points": 3,
+      "effects": { "protection": 1 }
+    },
+    {
+      "id": "task_19",
+      "num": 19,
+      "name": "Police operations",
+      "function": "Set and support the operational area",
+      "staff": ["PROT", "OPS", "INTEL"],
+      "commands": ["MP"],
+      "capabilities": ["MP", "MI"],
+      "points": 5,
+      "cost": { "access": 2 },
+      "effects": { "assurance": 1, "protection": 1 }
+    },
+    {
+      "id": "task_20",
+      "num": 20,
+      "name": "CBRN operations",
+      "function": "Set and support the operational area",
+      "staff": ["PROT", "MED", "OPS"],
+      "commands": ["CBRN"],
+      "capabilities": ["CBRN"],
+      "points": 5,
+      "effects": { "protection": 2 }
+    },
+    {
+      "id": "task_21",
+      "num": 21,
+      "name": "AMD support",
+      "function": "Set and support the operational area",
+      "staff": ["PROT", "OPS"],
+      "commands": ["AMD"],
+      "capabilities": ["AMD", "MI"],
+      "points": 5,
+      "effects": { "protection": 2 }
+    }
+  ]
+}
