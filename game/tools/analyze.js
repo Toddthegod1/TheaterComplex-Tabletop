@@ -38,6 +38,12 @@ const LABELS = {
     ["Escalation risk", "lost a point or more per turn, on average, for holding the higher deterrence in violent crises", (f) => f.points.detDown / f.turns <= -1],
     ["Over-tasker", "over-tasked an MSC in at least one turn in three", (f) => f.points.overtask / f.turns <= -1 / 3],
     ["Unreliable execution", "more than one task in ten failed", (f) => f.failedShare > 0.1],
+    // The next four need the decision record, which only human players produce.
+    ["Deliberate planner", "spends 5 minutes or more planning a turn, on average", (f) => f.decisions && f.decisions.planMinutes >= 5],
+    ["Quick planner", "plans a turn in under a minute, on average", (f) => f.decisions && f.decisions.planMinutes < 1],
+    ["Relies on suggestions", "at least half of the planned tasks came from Suggest a plan", (f) => f.decisions && f.decisions.suggestedShare >= 0.5],
+    ["Revises plans", "removes or changes a planned task at least once a turn", (f) => f.decisions && f.decisions.changesPerTurn >= 1],
+    ["Looks before choosing", "inspects at least twice as many task cards as it plays", (f) => f.decisions && f.decisions.inspectsPerTask >= 2],
   ],
 };
 
@@ -120,6 +126,29 @@ files.forEach((file) => {
       points,
       favourite: Object.entries(taskCount).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} x${v}`).join("; "),
     };
+    // How the player decided (human players only: the AI leaves no decision record).
+    const ev = (rec.events || []).filter((e) => e.army === team);
+    if (ev.length) {
+      const count = (a) => ev.filter((e) => e.action === a).length;
+      let seconds = 0;
+      let timed = 0;
+      turns.forEach((t) => {
+        const start = ev.find((e) => e.turn === t.turn && e.action === "planning-start");
+        const end = ev.filter((e) => e.turn === t.turn && e.action === "plan-submit").pop();
+        if (start && end && end.t >= start.t) {
+          seconds += end.t - start.t;
+          timed++;
+        }
+      });
+      const adds = ev.filter((e) => e.action === "plan-add");
+      f.decisions = {
+        planMinutes: timed ? seconds / timed / 60 : 0,
+        changesPerTurn: (count("plan-remove") + count("plan-change")) / n,
+        suggestedShare: adds.length ? adds.filter((e) => e.suggested).length / adds.length : 0,
+        inspectsPerTask: tasks ? count("inspect") / tasks : 0,
+        undos: count("undo"),
+      };
+    }
     f.focus = LABELS.focus.find((l) => l[2](f))[0];
     f.technique = LABELS.technique.find((l) => l[2](f))[0];
     f.traits = LABELS.traits.filter((l) => l[2](f)).map((l) => l[0]);
@@ -158,13 +187,13 @@ console.log("\nWhat the labels mean:");
 Object.values(LABELS).forEach((group) => group.forEach(([name, meaning]) => console.log(`  ${pad(name, 22)} ${meaning}`)));
 
 if (csvPath) {
-  const cols = ["file", "army", "player", "opponent", "turns", "finished", "result", "score", "opponentScore", "par", "vsPar", "focus", "technique", "traits", "tasksPerTurn", "slotsUsed", "zoneA", "zoneB", "zoneC", "effectDice", "effectAdvantage", "effectShaping", "effectAssurance", "disruptionsPerTurn", "rffPerTurn", "failedShare", "ptsZoneWins", "ptsObjectiveBonus", "ptsDeterrenceCalm", "ptsDeterrenceViolent", "ptsInfluence", "ptsOvertask", "favouriteTasks"];
+  const cols = ["file", "army", "player", "opponent", "turns", "finished", "result", "score", "opponentScore", "par", "vsPar", "focus", "technique", "traits", "tasksPerTurn", "slotsUsed", "zoneA", "zoneB", "zoneC", "effectDice", "effectAdvantage", "effectShaping", "effectAssurance", "disruptionsPerTurn", "rffPerTurn", "failedShare", "ptsZoneWins", "ptsObjectiveBonus", "ptsDeterrenceCalm", "ptsDeterrenceViolent", "ptsInfluence", "ptsOvertask", "favouriteTasks", "planMinutesPerTurn", "planChangesPerTurn", "suggestedShare", "cardsInspectedPerTask", "undos"];
   const num = (x) => (typeof x === "number" ? Math.round(x * 1000) / 1000 : x);
   const q = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
-  const line = (f) =>
-    [f.file, f.army, f.player, f.opponent, f.turns, f.finished, f.result, f.score, f.opponentScore, f.par, f.vsPar, f.focus, f.technique, f.traits.join("; "), f.tasksPerTurn, f.slotsUsed, f.zone.A, f.zone.B, f.zone.C, f.effect.dice, f.effect.advantage, f.effect.shaping, f.effect.assurance, f.disruptionsPerTurn, f.rffPerTurn, f.failedShare, f.points.wins, f.points.bonus, f.points.detUp, f.points.detDown, f.points.influence, f.points.overtask, f.favourite]
+  const line = (f, d = f.decisions || {}) =>
+    [f.file, f.army, f.player, f.opponent, f.turns, f.finished, f.result, f.score, f.opponentScore, f.par, f.vsPar, f.focus, f.technique, f.traits.join("; "), f.tasksPerTurn, f.slotsUsed, f.zone.A, f.zone.B, f.zone.C, f.effect.dice, f.effect.advantage, f.effect.shaping, f.effect.assurance, f.disruptionsPerTurn, f.rffPerTurn, f.failedShare, f.points.wins, f.points.bonus, f.points.detUp, f.points.detDown, f.points.influence, f.points.overtask, f.favourite, d.planMinutes, d.changesPerTurn, d.suggestedShare, d.inspectsPerTask, d.undos]
       .map((v) => q(num(v)))
       .join(",");
-  fs.writeFileSync(csvPath, "﻿" + [cols.join(",")].concat(rows.map(line)).join("\r\n"));
+  fs.writeFileSync(csvPath, "﻿" + [cols.join(",")].concat(rows.map((f) => line(f))).join("\r\n"));
   console.log(`\nWrote ${rows.length} rows to ${csvPath}`);
 }

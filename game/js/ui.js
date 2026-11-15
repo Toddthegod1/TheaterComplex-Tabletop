@@ -295,11 +295,14 @@
             <div class="hint">The tabletop game runs for a set time (typically 4 hours). The turn track goes to 10.</div></div>
           <div class="field"><label>Planning timer</label>${seg("planTimerMinutes", [[0, "Off"], [10, "10 min"], [20, "20 min"], [30, "30 min (rules)"]], s.settings.planTimerMinutes)}</div>
           ${s.mode !== "hotseat" && s.mode !== "online" ? `<div class="field"><label>AI opponent</label>${seg("aiLevel", Object.entries(AI.LEVELS).map(([k, l]) => [k, l.label]), s.settings.aiLevel)}
-            <div class="hint">${{ easy: "Recruit plans fewer tasks and makes loose choices. Best for your first campaign.", normal: "Regular plays a full, sensible campaign.", hard: "Aggressive plays like Regular and also turns tasks against you with Disruption." }[s.settings.aiLevel] || ""}</div></div>` : ""}
+            <div class="hint">${{ easy: "Recruit plans fewer tasks and makes loose choices. Best for your first campaign.", normal: "Regular plays a full, sensible campaign.", hard: "Aggressive is the strongest opponent. It also turns tasks against you with Disruption and shifts its combat units to the deterrence level that pays best in each zone." }[s.settings.aiLevel] || ""}</div></div>` : ""}
           <div class="field"><label>AI pace</label>${seg("aiSpeed", [[2, "Deliberate"], [1, "Normal"], [0.4, "Fast"]], s.settings.aiSpeed)}</div>
           <div class="field"><label>Seed (optional)</label><input type="text" data-act="setup-seed" value="${esc(s.seed)}" placeholder="random"><div class="hint">Same seed = same dice and draws, for exercises and after-action review.</div></div>
         </div>
         <div>
+          <div class="field"><label>Balance option (not in the rulebook)</label>
+            ${seg("tenthHeadStart", [[0, "Off (rulebook)"], [1, "Tenth +1"], [2, "Tenth +2"], [3, "Tenth +3"]], s.settings.tenthHeadStart || 0)}
+            <div class="hint">Tenth Army starts with these points. With the rulebook setup Fourth Army wins 58% of AI-vs-AI campaigns, because its home zone pays slightly more; a 2-point head start makes it even (286 to 290 over 600 simulated campaigns).</div></div>
           <div class="field"><label>Rules interpretations</label>
             ${tog("capsMustBeInTaskZone", "Capabilities must be in the task's zone", "Tasks are executed near a zone; their capability cards come from that zone's mat. Turn off to let tasks draw on any zone, as ASOS does.")}
             ${tog("commandsCountTowardRff", "Requested MSCs count toward the 10-force RFF cap", "The rulebook caps 'additional capabilities' at 10 and is silent on command cards.")}
@@ -348,7 +351,7 @@
       <span class="spacer"></span>
       ${TC.net ? TC.net.chip() : ""}${s.taskLimit ? `<span class="chip" title="Adjudicator's d6 roll (minimum 3)">Task limit ${s.taskLimit}</span>` : ""}
       <div class="scorebox">${side("fourth")}${side("tenth")}</div>
-      <button class="btn sm ghost" data-act="tabletop" id="btn-table" title="Table view: see this position as it would look on the physical table, with the real mats, tracker cards and markers">▦ <span class="lf">Table</span></button>
+      <button class="btn sm ghost" data-act="tabletop" id="btn-table" title="Table view: see this position as it would look on the physical table, with the real mats, tracker cards and markers"><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true" style="vertical-align:-2px"><g fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="11" height="11" rx="1.5"/><path d="M1 5h11M1 8.5h11M5 1v11M8.5 1v11"/></g></svg> <span class="lf">Table</span></button>
       <button class="btn sm ghost" data-act="glossary" title="Glossary: what ASOS, RFF, MSC, LSCO and the other abbreviations mean">Aa <span class="lf">Glossary</span></button>
       <button class="btn sm ghost" data-act="codex" title="Rules Codex">📖 <span class="lf">Rules</span></button>
       <button class="btn sm ghost" data-act="menu" title="Menu">☰</button>
@@ -595,6 +598,7 @@
     const zones = entry ? [entry.zone] : TC.ZONES;
     const opp = TC.other(team);
     const executing = el.dataset.inspect === "task" && s.phase === "implementation";
+    if (el.dataset.inspect === "plan" && App.noteInspect) App.noteInspect(team, task.num);
 
     const chips = Object.entries(req.effects)
       .filter(([, v]) => v)
@@ -758,7 +762,9 @@
           <div class="teff">${effectSummary(task)}</div>
           <div class="tfoot">${why || dots}${cost}</div></div></div>`;
     }).join("");
-    const filters = [["all", "All"], ["suggested", "★ Suggested"], ["ready", "Plannable now"], ["intel", "Intel"], ["comms", "Comms"], ["protection", "Protection"], ["partnerCap", "Partner Cap"], ["infrastructure", "Infra"], ["interop", "Interop"], ["stockage", "Stockage"], ["assurance", "Assurance"], ["influence", "Influence"], ["access", "Access"]]
+    const filterList = [["all", "All"], ["suggested", "★ Suggested"], ["ready", "Plannable now"], ["intel", "Intel"], ["comms", "Comms"], ["protection", "Protection"], ["partnerCap", "Partner Cap"], ["infrastructure", "Infra"], ["interop", "Interop"], ["stockage", "Stockage"], ["assurance", "Assurance"], ["influence", "Influence"], ["access", "Access"]];
+    const filterSelect = `<select class="handfilter-select" data-change="hand-filter-select" title="Show only some task cards">${filterList.map(([k, l]) => `<option value="${k}" ${filter === k ? "selected" : ""}>${k === "all" ? "Show: all cards" : l}</option>`).join("")}</select>`;
+    const filters = filterList
       .map(([k, l]) => `<button class="btn sm ${filter === k ? "on" : ""}" data-act="hand-filter" data-k="${k}">${l}</button>`)
       .join("");
     const list = plan.tasks
@@ -771,7 +777,7 @@
     const rff = E.rffProjected(s, me);
     const timer = s.settings.planTimerMinutes ? `<span class="chip" id="plan-timer">⏱ --:--</span>` : "";
     return `<footer class="dock">
-      <div class="col grow" style="min-width:0"><h3>Task cards <span class="chip">${plan.tasks.length} / ${s.taskLimit} planned</span>${timer}<span class="muted" style="text-transform:none;letter-spacing:0;font-size:12px">Hover a card to see what it changes · click to plan it · scroll for more</span></h3>
+      <div class="col grow" style="min-width:0"><h3>Task cards <span class="chip">${plan.tasks.length} / ${s.taskLimit} planned</span>${timer}${filterSelect}<span class="muted dockhint" style="text-transform:none;letter-spacing:0;font-size:12px">Hover a card to see what it changes · click to plan it · scroll for more</span></h3>
         <div class="seg handfilters">${filters}</div>
         <div class="hand" id="hand">${hand || `<div class="muted" style="padding:20px">No task cards match this filter.</div>`}</div></div>
       <div class="col" style="width:290px"><h3>Campaign ${K.teamChip(me)}</h3><div class="col scroll" style="gap:6px;max-height:150px">${list || '<div class="muted">No tasks yet.</div>'}</div>
@@ -1013,7 +1019,7 @@
         <div class="modal-body"><div class="col" style="display:flex;flex-direction:column;gap:8px">
           <button class="btn" data-act="codex">📖 Rules Codex</button>
           ${Object.values(App.state.controllers).includes("remote") ? '<button class="btn" data-act="online">🌐 Online play: invite or reconnect</button>' : ""}
-          <button class="btn" data-act="tabletop">▦ Table view (how it looks on the real table)</button>
+          <button class="btn" data-act="tabletop"><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true" style="vertical-align:-2px"><g fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="11" height="11" rx="1.5"/><path d="M1 5h11M1 8.5h11M5 1v11M8.5 1v11"/></g></svg>&nbsp; Table view (how it looks on the real table)</button>
           <button class="btn" data-act="export">💾 Download save file</button>
           <button class="btn" data-act="import">📂 Load save file</button>
           <button class="btn" data-act="export-log" title="Every adjudicator log line as a spreadsheet (CSV): turn, phase, army, text">📜 Export adjudicator log (spreadsheet)</button>
@@ -1303,6 +1309,9 @@
       App.render();
     },
     export() {
+      if (App.humans().length === 2 && App.state.phase === "planning") {
+        return App.notify("A save file made now would contain both staffs' secret plans. It is available again once both plans are submitted. The campaign is autosaved in the meantime.", "Not during hot-seat planning");
+      }
       const blob = new Blob([App.encodeSave(App.state)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);

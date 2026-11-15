@@ -175,7 +175,10 @@
     if (!App.canUndo() || App.ui.modal) return;
     const u = App.ui.undo;
     App.ui.undo = null;
+    const events = App.state.events || [];
     App.state = JSON.parse(u.snap);
+    App.state.events = events; // what was tried stays on the record
+    E.logEvent(App.state, u.team, "undo", { what: u.label });
     Object.assign(App.ui, { toasts: [], flashes: {}, snap: null });
     App.save();
     App.render();
@@ -427,11 +430,81 @@
   App.actions["export-log"] = () => App.state && download(`theatercomplex-log-${stamp(App.state)}.csv`, App.logCsv(App.state), "text/csv");
   App.actions["export-record"] = () => App.state && download(`theatercomplex-record-${stamp(App.state)}.json`, JSON.stringify(App.campaignRecord(App.state), null, 1), "application/json");
 
+  // ================================================================ decision record
+  // Every commitment a human player makes goes into state.events, so exported
+  // campaign records can show how someone planned, not only what was played.
+  const taskOf = (state, team, uid) => {
+    const t = state.plans[team] && state.plans[team].tasks.find((x) => x.uid === uid);
+    return t ? { task: t.num, zone: t.zone } : {};
+  };
+  const cardOf = (id) => (R.cap(id) ? { card: R.cap(id).code } : R.cmd(id) ? { card: R.cmd(id).code + " MSC" } : {});
+  const DESCRIBE = {
+    planTask: (s, team, spec) => ["plan-add", { task: spec.num, zone: spec.zone, suggested: !!App.ui.suggesting }],
+    unplanTask: (s, team, uid) => ["plan-remove", taskOf(s, team, uid)],
+    replanTask: (s, team, uid, spec) => ["plan-change", { task: spec.num, zone: spec.zone }],
+    toggleRff: (s, team, id, zone) => ["rff-toggle", Object.assign(cardOf(id), { zone: zone || null })],
+    toggleRffReturn: (s, team, id) => ["rff-return-toggle", cardOf(id)],
+    toggleRsoi: (s, team, id, zone) => ["rsoi-toggle", Object.assign(cardOf(id), { zone })],
+    toggleAsosCover: (s, team, id, zone) => ["asos-cover-toggle", Object.assign(cardOf(id), { zone })],
+    setTransfer: (s, team, id, to) => ["transfer", Object.assign(cardOf(id), { to: to || null })],
+    allocateAsos: (s, team, asosId, caps) => ["asos-commit", { request: asosId, cards: (caps || []).length }],
+    declareAsosUnmet: (s, team, asosId) => ["asos-unmet", { request: asosId }],
+    setReady: (s, team, ready) => [ready === false ? "plan-reopen" : "plan-submit", { tasks: s.plans[team].tasks.length, limit: s.taskLimit }],
+    executeTask: (s, team, uid, opts) => [opts && opts.disrupt ? "disruption" : "execute", taskOf(s, team, uid)],
+    standDownTask: (s, team, uid) => ["stand-down", taskOf(s, team, uid)],
+    spendInfluence: (s, team, zone) => ["spend-influence", { zone }],
+    chooseIntel: (s, team, choice) => ["intel-choice", { kind: choice && choice.kind }],
+  };
+  Object.keys(DESCRIBE).forEach((name) => {
+    const fn = E[name];
+    E[name] = function (state, team) {
+      const live = state === App.state && App.isHuman(team) && !state.tutorial;
+      const what = live ? DESCRIBE[name].apply(null, arguments) : null; // before the call: it may remove what we describe
+      const r = fn.apply(this, arguments);
+      if (what && !(r && r.ok === false)) E.logEvent(state, team, what[0], what[1]);
+      return r;
+    };
+  });
+  // "Suggest a plan" adds tasks through the same engine calls; mark those.
+  const suggest = App.actions["suggest-plan"];
+  App.actions["suggest-plan"] = function () {
+    App.ui.suggesting = true;
+    try {
+      return suggest.apply(this, arguments);
+    } finally {
+      App.ui.suggesting = false;
+    }
+  };
+  // Start of a player's planning, and each task card they look at.
+  App.noteDecisions = function () {
+    const s = App.state;
+    if (!s || s.tutorial || App.ui.screen !== "game" || App.ui.curtain) return;
+    const me = App.me();
+    if (s.phase === "planning" && App.isHuman(me) && !s.plans[me].ready && App.ui.planMark !== `${s.seed}:${s.turn}:${me}`) {
+      App.ui.planMark = `${s.seed}:${s.turn}:${me}`;
+      E.logEvent(s, me, "planning-start", { limit: s.taskLimit });
+    }
+  };
+  App.noteInspect = function (team, num) {
+    const s = App.state;
+    if (!s || s.tutorial || s.phase !== "planning" || !App.isHuman(team)) return;
+    const key = `${s.seed}:${s.turn}:${team}:${num}`;
+    App.ui.inspected = App.ui.inspected || {};
+    if (App.ui.inspected[key]) return;
+    App.ui.inspected[key] = 1;
+    E.logEvent(s, team, "inspect", { task: num });
+  };
+  A["hand-filter-select"] = (el) => {
+    App.ui.handFilter = el.value;
+    App.render();
+  };
+
   // ================================================================ title-screen extras
   // The free-form tabletop lives outside the game folder; only offer the link
   // when it is really there (it is missing when just `game/` was shared).
   let tabletop = null;
   App.afterRender = function () {
+    App.noteDecisions();
     const link = document.getElementById("tabletop-link");
     if (!link) return;
     if (tabletop === true) link.hidden = false;

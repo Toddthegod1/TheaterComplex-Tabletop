@@ -68,7 +68,7 @@ A task card:
 
 | File | Made by | What it is |
 |---|---|---|
-| Save file (`.json`) | Menu → Download save file | The whole game state, so a campaign can be resumed. A hot-seat save made during planning is scrambled (not encrypted) so the plans cannot be read in a text editor. |
+| Save file (`.json`) | Menu → Download save file | The whole game state, so a campaign can be resumed. Not offered during hot-seat planning, when it would contain both secret plans. |
 | Adjudicator log (`.csv`) | Menu or end screen | One row per log line: line, turn, phase, army, kind, text. Opens in Excel. |
 | Campaign record (`.json`) | Menu or end screen | The campaign as data for analysis. |
 
@@ -84,6 +84,7 @@ A task card:
 | `scoreBySource` | Points by source for each army: zone wins, objective bonus, deterrence (calm and violent), Influence lead, over-tasked MSCs |
 | `turns[]` | One entry per finished turn: `taskLimit`, `asos`, `initiative`, `tasks` (each army's task cards with zone, branch, options, status and whether it was a Disruption), `rffArrived`, `crisis` (per zone: type, Instability, d10 roll, winner, totals, dice, deterrence, points), `trackers` (every tracker value at the end of the turn), `scoreAfter` |
 | `scoreEvents[]` | Every point awarded: turn, army, points, reason |
+| `events[]` | What each human player did and when: `t` (seconds since the campaign began), `turn`, `phase`, `army`, `action` and details. Actions: `planning-start`, `inspect` (looked at a task card), `plan-add` (with `suggested` true when it came from Suggest a plan), `plan-remove`, `plan-change`, `plan-submit`, `rff-toggle`, `rff-return-toggle`, `rsoi-toggle`, `asos-cover-toggle`, `transfer`, `asos-commit`, `asos-unmet`, `execute`, `disruption`, `stand-down`, `spend-influence`, `intel-choice`, `undo`. The turn still being played is left out, so a record exported mid-turn never shows a plan that is still secret. AI players leave no events. |
 | `log[]` | The adjudicator log |
 
 `node game/tools/analyze.js <folder of records> --csv players.csv` reads any number of these and writes one row per player.
@@ -92,4 +93,4 @@ A task card:
 
 1. **Move the task cards into the workbook** if designers prefer one place to edit. `rules.json` is ready to be generated from a sheet: the schema already defines every column.
 2. **Give capability cards permanent IDs in the workbook.** Today the ID (`4a_cap_001`) comes from the row order, so inserting a row renumbers the cards below it and breaks older save files.
-3. **Record decisions, not only outcomes.** The campaign record says what was played. If the analysis should cover how a player decided (cards considered, plans changed, time taken), add an event list to the record: `{ t, turn, phase, army, action, details }`.
+3. **Decide what to do with decision data.** The record now includes each human player's decisions with timings (`events[]`). Before using it to describe students, agree what is fair to infer from it: planning time, for instance, also reflects reading speed and interruptions.

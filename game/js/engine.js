@@ -56,6 +56,10 @@
       rsoiApproved: { fourth: false, tenth: false },
       log: [],
       scoreEvents: [],
+      // What the human players did and when (seconds since the campaign began);
+      // filled in by the interface, exported in the campaign record.
+      events: [],
+      startedAt: Date.now(),
       history: [],
       uid: 1,
     };
@@ -78,6 +82,7 @@
     });
     state.asos.deck = R.shuffle(state, TC.GENERATED.asos.map((a) => a.id));
     log(state, "Theater campaign begins. Fourth Army (black) and Tenth Army (white) take their posts.", { tone: "head" });
+    if (settings.tenthHeadStart > 0) addScore(state, "tenth", settings.tenthHeadStart, "head start (balance option)");
     secWarDraw(state);
     return state;
   };
@@ -955,6 +960,13 @@
 
   E.phaseIndex = (state) => E.PHASES.findIndex((p) => p.key === state.phase);
 
+  // One decision by a player: { t, turn, phase, army, action, ...details }.
+  E.logEvent = function (state, team, action, details) {
+    if (!state.events) state.events = [];
+    const t = Math.round((Date.now() - (state.startedAt || Date.now())) / 100) / 10;
+    state.events.push(Object.assign({ t, turn: state.turn, phase: state.phase, army: team, action }, details || {}));
+  };
+
   // ---------------------------------------------------------------- records for review and analysis
   const SCORE_SOURCES = [
     ["wins", "Zone wins", (e) => /^won Zone/.test(e.reason)],
@@ -963,6 +975,7 @@
     ["detDown", "Deterrence lead in violent crises", (e) => /^higher deterrence/.test(e.reason) && e.pts < 0],
     ["influence", "Influence lead", (e) => /Influence/.test(e.reason)],
     ["overtask", "Over-tasked MSCs", (e) => /over-tasked/.test(e.reason)],
+    ["headStart", "Head start (balance option)", (e) => /^head start/.test(e.reason)],
   ];
   // Points by source for one army: [{ key, label, pts }].
   E.scoreBreakdown = function (state, team) {
@@ -990,6 +1003,9 @@
       scoreBySource: { fourth: E.scoreBreakdown(s, "fourth"), tenth: E.scoreBreakdown(s, "tenth") },
       turns: s.history.map((h) => Object.assign({ turn: h.turn, scoreAfter: h.score }, h.record || { crisis: h.crisis })),
       scoreEvents: s.scoreEvents,
+      // Decisions by human players. The current, unfinished turn is left out so a
+      // record exported mid-turn never reveals a plan that is still secret.
+      events: (s.events || []).filter((e) => s.phase === "gameOver" || e.turn < s.turn).map((e) => Object.assign({}, e, { _s: undefined })),
       log: s.log.map((l, i) => ({ line: i + 1, turn: l.turn, phase: l.phase, army: l.team, kind: l.tone, text: l.text })),
     };
   };

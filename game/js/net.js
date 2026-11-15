@@ -150,7 +150,7 @@
   const other = () => TC.other(Net.team);
   const keyOf = (s) => `${s.turn}:${s.phase}`;
   const localize = (s) => (s.controllers = { [Net.team]: "human", [other()]: "remote" });
-  const markSent = (s) => s.log.forEach((l) => (l._s = 1));
+  const markSent = (s) => (s.log.forEach((l) => (l._s = 1)), (s.events || []).forEach((e) => (e._s = 1)));
 
   // My army's part of the game: what I am allowed to change.
   function slice(withPlan) {
@@ -158,8 +158,10 @@
     const me = Net.team;
     const mine = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v.team === me));
     const lines = s.log.filter((l) => !l._s);
-    const out = { team: me, alloc: s.asos.alloc[me], teamState: s.teams[me], cards: mine(s.cards), commands: mine(s.commands), uid: s.uid, log: lines.map((l) => Object.assign({}, l)) };
+    const events = (s.events || []).filter((e) => !e._s);
+    const out = { team: me, alloc: s.asos.alloc[me], teamState: s.teams[me], cards: mine(s.cards), commands: mine(s.commands), uid: s.uid, log: lines.map((l) => Object.assign({}, l)), events: events.map((e) => Object.assign({}, e)) };
     lines.forEach((l) => (l._s = 1));
+    events.forEach((e) => (e._s = 1));
     if (withPlan) out.plan = s.plans[me];
     return out;
   }
@@ -172,6 +174,7 @@
     Object.assign(s.commands, sl.commands);
     s.uid = Math.max(s.uid, sl.uid);
     sl.log.forEach((l) => s.log.push(Object.assign(l, { _s: 1 })));
+    (sl.events || []).forEach((e) => (s.events = s.events || []).push(Object.assign(e, { _s: 1 })));
     if (sl.plan) s.plans[t] = sl.plan;
   }
   function sendState() {
@@ -420,11 +423,24 @@
     m.note = "Connecting…";
     const code = (m.reply = document.getElementById("net-reply").value);
     App.render();
-    Net.hostAccept(code).catch((e) => {
-      m.note = "";
-      fail(e);
-    });
+    Net.hostAccept(code)
+      .then(() => waitForLink(m))
+      .catch((e) => {
+        m.note = "";
+        fail(e);
+      });
   };
+  // If the two browsers cannot reach each other, say so instead of waiting forever.
+  function waitForLink(m) {
+    setTimeout(() => {
+      if (Net.open() || App.ui.modal !== m) return;
+      m.note = "";
+      m.error = "The two browsers could not reach each other. This usually means one of the networks blocks direct connections (common on work, school and military networks). Try again with a new invite, or have one player use another network such as a phone hotspot.";
+      m.code = "";
+      App.render();
+      makeInvite();
+    }, 25000);
+  }
   A["net-copy"] = (el) => {
     const t = document.getElementById(el.dataset.from);
     t.select();

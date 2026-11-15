@@ -112,5 +112,7 @@
     planTimerMinutes: 0,
     aiSpeed: 1,
     aiLevel: "normal",
+    // Optional handicap (not in the rulebook): points Tenth Army starts with.
+    tenthHeadStart: 0,
   };
 })();

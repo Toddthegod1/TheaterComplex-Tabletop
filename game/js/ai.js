@@ -18,13 +18,14 @@
   // and with the Nov 2026 ASOS ruling (every listed type needed), Regular
   // against itself gives Fourth 334, Tenth 244 over 600 games (58% of decided
   // games; 200 games swing by +-7 points). What is left is the home zones:
-  // Zone A pays Fourth slightly more than Zone C pays Tenth. Aggressive and
-  // Regular are not measurably different (54-60 over 120 games). Recruit
-  // loses about 3:1.
+  // Zone A pays Fourth slightly more than Zone C pays Tenth. posture: choose
+  // each zone's deterrence by expected points and move combat units to match;
+  // with it Aggressive beats Regular 84-28 over 120 games (it was level
+  // before). Recruit loses about 3:1.
   AI.LEVELS = {
     easy: { label: "Recruit", noise: 1.6, taskCut: 2 },
     normal: { label: "Regular", noise: 0.3, taskCut: 0, contest: 1.5, base: 0.25 },
-    hard: { label: "Aggressive", noise: 0.3, taskCut: 0, contest: 1.5, base: 0.25, disrupt: true },
+    hard: { label: "Aggressive", noise: 0.3, taskCut: 0, contest: 1.5, base: 0.25, disrupt: true, posture: true },
   };
   // The human player's operations officer always advises like a Regular.
   const ADVISOR = AI.LEVELS.normal;
@@ -195,9 +196,11 @@
       if (id && newCmds < 2 && E.rffProjected(state, team) < E.RFF_LIMIT - 4 && E.toggleRff(state, team, id).ok) newCmds++;
     });
 
-    // Deterrence: aim to match the opponent (+1), never far above it.
     const opp = TC.other(team);
-    TC.ZONES.forEach((zone) => {
+    // Aggressive: work out which deterrence level pays best in each zone and move forces to match.
+    if (AI.level(state, team).posture) AI.planPosture(state, team, gfm);
+    // Otherwise: aim to match the opponent (+1), never far above it.
+    else TC.ZONES.forEach((zone) => {
       const mine = R.deterrence(state, team, zone);
       const theirs = R.deterrence(state, opp, zone);
       let need = theirs + 1 - mine;
@@ -228,6 +231,104 @@
         .sort((a, b) => R.cap(b).points - R.cap(a).points)
         .slice(0, 3)
         .forEach((id, i) => E.toggleRsoi(state, team, id, TC.ZONES[i]));
+    }
+  };
+
+  // ---------------------------------------------------------------- force posture (Aggressive)
+  // Expected points swing for `team` in `zone` at a Crisis Assessment if its
+  // deterrence there were `det`: zone win and objective bonus by crisis type,
+  // the +1 / -3 for holding the higher deterrence, and how the deterrence gap
+  // moves Instability (and so how often the crisis turns violent).
+  AI.postureValue = function (state, team, zone, det) {
+    const opp = TC.other(team);
+    const oppDet = R.deterrence(state, opp, zone);
+    const stats = (t, d) => {
+      const z = state.teams[t].zones[zone];
+      const dice = [R.legend("deterrence", zone, d)];
+      for (let i = 0; i < R.legend("infrastructure", zone, z.infrastructure); i++) dice.push(6);
+      const drm = R.legend("stockage", zone, z.stockage);
+      let mean = dice.reduce((x, sd) => x + expectedDie(sd) + drm, 0);
+      let vr = dice.reduce((x, sd) => x + (sd * sd - 1) / 12, 0);
+      const partner = [R.legend("partnerCap", zone, z.partnerCap)];
+      for (let i = 0; i < R.legend("interop", zone, z.interop); i++) partner.push(4);
+      partner.forEach((sd) => ((mean += expectedDie(sd)), (vr += (sd * sd - 1) / 12)));
+      return { mean, vr, violent: d + R.assuranceInstability(z.assurance) };
+    };
+    const a = stats(team, det);
+    const b = stats(opp, oppDet);
+    const za = state.teams[team].zones[zone];
+    const zb = state.teams[opp].zones[zone];
+    let diff = a.mean - b.mean;
+    [["intel", 1], ["comms", 1.2], ["protection", 1.4]].forEach(([k, w]) => (diff += za[k] > zb[k] ? w : zb[k] > za[k] ? -w : 0));
+    const sd = Math.sqrt(a.vr + b.vr) || 1;
+    const inst = Math.abs(det - oppDet) + R.assuranceInstability(za.assurance) + R.assuranceInstability(zb.assurance);
+    const odds = R.crisisOdds(inst);
+    const myBonus = zone === TC.TEAM_INFO[team].objectiveZone;
+    const oppBonus = zone === TC.TEAM_INFO[opp].objectiveZone;
+    let ev = 0;
+    Object.keys(odds).forEach((type) => {
+      const ct = TC.CRISIS_TYPES[type];
+      const pWin = phi((diff + (ct.violent ? a.violent - b.violent : 0)) / sd);
+      ev += (odds[type] / 100) * (pWin * (ct.victor + (myBonus ? ct.bonus : 0)) - (1 - pWin) * (ct.victor + (oppBonus ? ct.bonus : 0)) + (det > oppDet ? ct.deterrence : det < oppDet ? -ct.deterrence : 0));
+    });
+    return ev;
+  };
+  // Moves combat units (which fill no task or ASOS requirement) between zones,
+  // requests them or sends requested ones home, one move at a time, while a
+  // move still improves next year's expected points.
+  AI.planPosture = function (state, team, gfm) {
+    const plan = state.plans[team];
+    const combat = (id) => R.cap(id).points === 0;
+    // Category counts per zone as they will stand after Force Tailoring.
+    const counts = {};
+    TC.ZONES.forEach((z) => {
+      counts[z] = { 1: 0, 2: 0, 3: 0, 4: 0 };
+      R.capsInZone(state, team, z).forEach((id) => state.cards[id].origin !== "secwar" && !plan.rffReturn.includes(id) && counts[z][R.cap(id).cat]++);
+    });
+    plan.transfers.forEach((t) => (counts[state.cards[t.id].zone][R.cap(t.id).cat]--, counts[t.to][R.cap(t.id).cat]++));
+    plan.rffNew.forEach((r) => r.zone && R.cap(r.id) && counts[r.zone][R.cap(r.id).cat]++);
+    const det = (z) => [1, 2, 3, 4].reduce((x, cat) => x + Math.floor(counts[z][cat] / cat), 0);
+    const total = () => TC.ZONES.reduce((x, z) => x + AI.postureValue(state, team, z, det(z)), 0);
+    for (let step = 0; step < 6; step++) {
+      const base = total();
+      let best = null;
+      const consider = (gain, apply) => {
+        if (gain > 0.15 && (!best || gain > best.gain)) best = { gain, apply };
+      };
+      const tryWith = (changes, apply) => {
+        changes.forEach(([z, cat, d]) => (counts[z][cat] += d));
+        const gain = total() - base;
+        changes.forEach(([z, cat, d]) => (counts[z][cat] -= d));
+        consider(gain, () => (changes.forEach(([z, cat, d]) => (counts[z][cat] += d)), apply()));
+      };
+      // Move a combat unit already in theater to another zone, or send a requested one home.
+      TC.ZONES.forEach((from) => {
+        const seen = {};
+        R.capsInZone(state, team, from)
+          .filter((id) => combat(id) && state.cards[id].origin !== "secwar" && !plan.transfers.some((t) => t.id === id) && !plan.rffReturn.includes(id))
+          .forEach((id) => {
+            const cat = R.cap(id).cat;
+            const rff = state.cards[id].origin === "rff";
+            if (seen[`${cat}${rff}`]) return; // one of each kind is enough to evaluate
+            seen[`${cat}${rff}`] = 1;
+            TC.ZONES.filter((to) => to !== from).forEach((to) => tryWith([[from, cat, -1], [to, cat, 1]], () => E.setTransfer(state, team, id, to)));
+            if (rff) tryWith([[from, cat, -1]], () => E.toggleRffReturn(state, team, id));
+          });
+      });
+      // Request a combat unit from the global pool.
+      if (E.rffProjected(state, team) < E.RFF_LIMIT - 2) {
+        const seen = {};
+        gfm()
+          .filter(combat)
+          .forEach((id) => {
+            const cat = R.cap(id).cat;
+            if (seen[cat]) return;
+            seen[cat] = 1;
+            TC.ZONES.forEach((to) => tryWith([[to, cat, 1]], () => E.toggleRff(state, team, id, to)));
+          });
+      }
+      if (!best) break;
+      best.apply();
     }
   };
 

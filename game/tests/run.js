@@ -287,10 +287,33 @@ const levelStats = {};
 test("Recruit is easier than Regular", () => {
   assert.ok(levelStats.easy.wins < levelStats.easy.losses, `Recruit should lose more than it wins vs Regular: ${JSON.stringify(levelStats.easy)}`);
 });
-test("Aggressive is not weaker than Regular", () => {
-  // 120 games cannot separate the two (54-60 after the ASOS ruling, 68-47 before);
-  // this only catches Aggressive becoming clearly worse.
-  assert.ok(levelStats.hard.wins >= levelStats.hard.losses * 0.75, `Aggressive is clearly losing to Regular: ${JSON.stringify(levelStats.hard)}`);
+test("Aggressive is clearly stronger than Regular", () => {
+  // Measured 84-28 over these 120 games once Aggressive started managing its
+  // deterrence posture; 1.5:1 leaves room for noise.
+  assert.ok(levelStats.hard.wins >= levelStats.hard.losses * 1.5, `Aggressive should beat Regular at least 3 games in 5: ${JSON.stringify(levelStats.hard)}`);
+});
+test("posture value rewards being one above the enemy in an evenly matched zone", () => {
+  const s = E.newGame({ seed: 6 });
+  const theirs = R.deterrence(s, "tenth", "B");
+  const v = (d) => AI.postureValue(s, "fourth", "B", d);
+  assert.ok(Number.isFinite(v(theirs)));
+  assert.ok(v(theirs + 1) > v(theirs), "one above the enemy earns the calm-crisis point");
+});
+test("the optional head start gives Tenth Army points and shows in the breakdown", () => {
+  const s = E.newGame({ seed: 8, settings: { tenthHeadStart: 2 } });
+  assert.strictEqual(s.teams.tenth.score, 2);
+  assert.strictEqual(s.teams.fourth.score, 0);
+  assert.strictEqual(E.scoreBreakdown(s, "tenth").find((r) => r.key === "headStart").pts, 2);
+  assert.strictEqual(E.newGame({ seed: 8 }).teams.tenth.score, 0, "off by default");
+});
+test("decision events are recorded and left out of a record until their turn is over", () => {
+  const s = E.newGame({ seed: 8 });
+  E.logEvent(s, "fourth", "plan-add", { task: 3, zone: "B" });
+  assert.strictEqual(s.events.length, 1);
+  assert.deepStrictEqual([s.events[0].turn, s.events[0].army, s.events[0].action, s.events[0].task], [1, "fourth", "plan-add", 3]);
+  assert.strictEqual(E.campaignRecord(s).events.length, 0, "turn 1 is still being played");
+  s.turn = 2;
+  assert.strictEqual(E.campaignRecord(s).events.length, 1);
 });
 test("Aggressive AI uses Disruption", () => {
   const s = playGame(7, 6, { aiLevel: "hard" });

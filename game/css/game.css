@@ -936,3 +936,46 @@ body.cb .c4::after { content: " ●"; font-size: 0.7em; }
 ol.steps { margin: 0; padding-left: 20px; }
 ol.steps li { margin-bottom: 14px; }
 .hud .chip[data-act="online"] { cursor: pointer; }
+
+
+/* ---------------------------------------------------------------- round 6 */
+/* Short screens: the row of filter buttons becomes one drop-down, giving the cards the height */
+.handfilter-select { display: none; font: 600 12px var(--body); background: var(--panel2); color: var(--text); border: 1px solid var(--line2); border-radius: 7px; padding: 2px 6px; text-transform: none; letter-spacing: 0; }
+@media (max-height: 820px), (max-width: 760px) {
+  .handfilters { display: none; }
+  .handfilter-select { display: inline-block; }
+  .dock .dockhint { display: none; }
+  .slotboard { font-size: 11px; gap: 2px; }
+}
+
+/* Movement: results arrive one after another instead of all at once */
+@keyframes popin { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes slidefrom { from { transform: translateX(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes scorebump { 0% { transform: scale(1); } 30% { transform: scale(1.5); } 100% { transform: scale(1); } }
+.pointsline .chip { animation: popin 0.45s cubic-bezier(.2, 1.4, .5, 1) both; }
+.pointsline .chip:nth-child(2) { animation-delay: 0.25s; }
+.pointsline .chip:nth-child(3) { animation-delay: 0.5s; }
+.verdict { animation: slidefrom 0.4s ease-out 0.3s both; }
+.yr .yrl { animation: slidefrom 0.35s ease-out both; }
+.yr .yrl:nth-child(2) { animation-delay: 0.08s; } .yr .yrl:nth-child(3) { animation-delay: 0.16s; } .yr .yrl:nth-child(4) { animation-delay: 0.24s; }
+.yr .yrl:nth-child(5) { animation-delay: 0.32s; } .yr .yrl:nth-child(6) { animation-delay: 0.4s; } .yr .yrl:nth-child(n+7) { animation-delay: 0.48s; }
+.yr .yrt { animation: popin 0.5s cubic-bezier(.2, 1.4, .5, 1) 0.5s both; }
+.banner.tip { animation: slidefrom 0.4s ease-out 0.7s both; }
+.tipmodal .banner.tip, .endmore .banner.tip, .modal.wide .banner.tip { animation: none; }
+.scorebox .pts.flash { display: inline-block; animation: scorebump 0.7s cubic-bezier(.2, 1.4, .5, 1), flashbg 2.8s ease-out both; }
+
+.endstage h1 { animation: stamp 0.5s cubic-bezier(.2, 1.6, .5, 1) both; }
+.endmore { animation: slidefrom 0.5s ease-out 0.4s both; }
+@media (prefers-reduced-motion: reduce) {
+  .pointsline .chip, .verdict, .yr .yrl, .yr .yrt, .banner.tip, .scorebox .pts.flash, .tt-marker, .tt-cap, .endstage h1, .endmore { animation: none; }
+}
+
+/* Phone: Force Management and other dialogs stack instead of squeezing */
+@media (max-width: 760px) {
+  .modal-body .banner[style*="display:flex"] { flex-direction: column !important; align-items: stretch !important; }
+  .modal-body > div[style*="display:flex"] { flex-wrap: wrap; }
+  .modal-body .grouped.flow { gap: 10px 12px; }
+  .modal-head .seg { margin-left: 0 !important; flex-wrap: wrap; }
+  .modal.wide .modal-body h3 { font-size: 15px; }
+  .tabletop .modal-head .muted { display: none; }
+}
