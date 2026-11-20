@@ -2,6 +2,8 @@
 
 TheaterComplex is a two-sided U.S. Army War College wargame (v13, Europe Edition). Staff officers run a Theater Army (Fourth or Tenth Army) across the competition-to-conflict continuum.
 
+**Play online: https://toddklinger.me/TheaterComplex-Tabletop/game/** (the free-form tabletop is at https://toddklinger.me/TheaterComplex-Tabletop/). The site is GitHub Pages serving this repository's `master` branch, so every push updates it within a minute or two.
+
 This repo contains two ways to play:
 
 | | What it is | Open |
