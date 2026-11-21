@@ -2,16 +2,16 @@
 
 TheaterComplex is a two-sided U.S. Army War College wargame (v13, Europe Edition). Staff officers run a Theater Army (Fourth or Tenth Army) across the competition-to-conflict continuum.
 
-**Play online: https://toddklinger.me/TheaterComplex-Tabletop/game/** (the free-form tabletop is at https://toddklinger.me/TheaterComplex-Tabletop/). The site is GitHub Pages serving this repository's `master` branch, so every push updates it within a minute or two.
+**Play online: https://toddklinger.me/TheaterComplex-Tabletop/** (opens the game; the free-form tabletop is at https://toddklinger.me/TheaterComplex-Tabletop/tabletop.html). The site is GitHub Pages serving this repository's `master` branch, so every push updates it within a minute or two.
 
 This repo contains two ways to play:
 
 | | What it is | Open |
 |---|---|---|
 | **Digital edition** | A rules-enforcing card game with a guided tutorial, an AI opponent, two-player modes (one screen or online), a Rules Codex and autosave. | `game/index.html` |
-| Free-form tabletop | The original drag-and-drop virtual table. Nothing is enforced. | `index.html` |
+| Free-form tabletop | The original drag-and-drop virtual table. Nothing is enforced. | `tabletop.html` |
 
-Both run straight from the file system: double-click the HTML file. There's no build step and no server.
+Both run straight from the file system: double-click the HTML file. The `index.html` at the top of the repository just forwards to the game. There's no build step and no server.
 
 ## Playing the digital edition
 

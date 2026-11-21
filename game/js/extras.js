@@ -510,13 +510,22 @@
     if (tabletop === true) link.hidden = false;
     if (tabletop !== null) return;
     tabletop = false;
-    const probe = new Image();
-    probe.onload = () => {
+    const found = () => {
       tabletop = true;
       const l = document.getElementById("tabletop-link");
       if (l) l.hidden = false;
     };
-    probe.src = "../assets/trackers/trackerArray_zoneA.svg";
+    if (location.protocol.startsWith("http")) {
+      // On a website: ask for the page's headers only (a few hundred bytes).
+      fetch("../tabletop.html", { method: "HEAD" }).then((r) => r.ok && found(), () => {});
+    } else {
+      // Opened from a folder, where fetch is not allowed: load a 4 KB picture
+      // from the tabletop's assets folder (it is only there when the whole
+      // project was copied, not just the game folder).
+      const probe = new Image();
+      probe.onload = found;
+      probe.src = "../assets/trackers/10a_tracker_influence.PNG";
+    }
   };
 
   // ================================================================ touch

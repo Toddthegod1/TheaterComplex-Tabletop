@@ -270,7 +270,7 @@
         <button class="btn ghost" data-act="online-join">Join online game…</button>
         <button class="btn ghost" data-act="import">Load save file…</button>
         ${App.hasSlots && App.hasSlots() ? '<button class="btn ghost" data-act="saves">Saved campaigns…</button>' : ""}
-        <a class="btn ghost" id="tabletop-link" href="../index.html" hidden>Open free-form tabletop</a>
+        <a class="btn ghost" id="tabletop-link" href="../tabletop.html" hidden>Open free-form tabletop</a>
       </div>
     </div></div>`;
   }
